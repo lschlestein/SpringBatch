@@ -201,3 +201,23 @@ spring.datasource.url=jdbc:postgresql://localhost:5432/postgres
 spring.datasource.username=postgres
 spring.datasource.password=postgres
 ```
+Nesse ponto, a aplicação deve iniciar normalmente se tudo estiver configurado corretamente.
+
+### Compreendendo os jobs e como executá-los
+Como já visto anteriomente a *Job* é uma entidade que encapsula um processo em lote inteiro que é executado do início ao fim sem interação ou interrupção. Nesta lição, você aprenderá como Jobs são representados internamente no Spring Batch, entenderá como eles são iniciados e entenderá como seus metadados de execução são persistidos.
+
+**O que é um Job?**
+A *Job* é uma entidade que encapsula um processo em lote inteiro que é executado do início ao fim. Consiste em um conjunto de etapas que são executadas em uma ordem específica.
+
+Um trabalho em lote no Spring Batch é representado pela interface Job fornecida pela dependência *spring-batch-core*:
+``` java
+public interface Job {
+    String getName();
+    void execute(JobExecution execution);
+}
+```
+Em um nível fundamental, a interface Job requer que as implementações especifiquem o *Jobname* (o método getName()) e o que ela deve fazer (o método execute).
+
+O método *execute* fornece uma referência a um objeto *JobExecution*. O *JobExecution* representa a execução real do *Job* em tempo de execução. Ele contém uma série de detalhes de tempo de execução, como o horário de início, o horário de término, o status da execução e assim por diante. Essas informações de tempo de execução são armazenadas pelo Spring Batch em um repositório de metadados, conforme configurado anteriormente.
+
+Observe que o método *execute* não lanca nenhuma exceção. Exceções de tempo de execução devem ser manipuladas por implementações e adicionadas no objeto *JobExecution*. Os clientes podem inspecionar o o status da *JobExecution* para determinar se Job foi executada com sucesso ou falha.
