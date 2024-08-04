@@ -64,3 +64,135 @@ A camada *Application*: contém o trabalho em lote e o código personalizado esc
 A camada *Batch Core*: contém as classes de tempo de execução principais fornecidas pelo Spring Batch que são necessárias para criar e controlar trabalhos em lote. Ela inclui implementações para *Job* e *Step*, bem como serviços comuns como *JobLauncher* e *JobRepository*.
 A camda *Batch Infrastructure*: contém readers e writters de itens comuns fornecidos pelo Spring Batch, além de serviços básicos, como mecanismos de repetição e nova tentativa, que são usados ​​tanto por desenvolvedores de aplicativos quanto pela própria estrutura principal.
 Como desenvolvedor do Spring Batch, você normalmente usa APIs fornecidas pelo Spring Batch nos módulos *Batch Infrastructure* e *Batch Core* para definir seus trabalhos e etapas na camada *Application*. O Spring Batch fornece uma rica biblioteca de componentes de lote que você pode usar imediatamente (como itens readers, itens writters, particionadores de dados e dentre outros).
+
+# Prática
+Criaremos um novo projeto, com as dependências **Spring Batch** e  **PostgresSQL Driver**
+![image](https://github.com/user-attachments/assets/6f480050-850f-450c-bad3-65630bc8268b)
+
+Será necessário criar um container docker, ou uma nova database no Postgres, para rodarmos nosso primeiro Job com Spring Batch.
+Para instruções de como criar um container, veja aqui (Link para aulas Docker)[].
+
+Com o projeto criado, crie uma nova classe chamada **BillingJobConfiguration.java** conforme abaixo:
+``` java
+package example.billingjob;
+
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class BillingJobConfiguration {
+  // TODO add job definition here
+}
+```
+This class is a placeholder for Spring Batch related beans (Jobs, Steps, etc) and contains a TODO that you will implement in a future Lab.
+
+Agora precisaremos configurar a database no Postgres.
+Crie o seguinte esquema conforme segue abaixo. O esquema do banco de dados pode ser criado via terminal, caso esteja utilizando o Docker, ou o PgAdmin.
+Se estiver utilizando o Docker, verifique se o container está inicializado e rodando através do comando:
+``` bash
+docker -ps
+
+CONTAINER ID   IMAGE                  COMMAND                  CREATED          STATUS          PORTS                      NAMES
+c711e7873371   postgres:14.1-alpine   "docker-entrypoint.s…"   20 minutes ago   Up 20 minutes   127.0.0.1:5432->5432/tcp   postgres
+```
+Em seguida, acesse o terminal do postgres
+``` bash
+docker exec -it postgres psql -U postgres
+```
+Conectado ao terminal, criei o seguinte esquema de tabelas conforme abaixo:
+``` bash
+CREATE TABLE BATCH_JOB_INSTANCE  (
+    JOB_INSTANCE_ID BIGINT  NOT NULL PRIMARY KEY ,
+    VERSION BIGINT ,
+    JOB_NAME VARCHAR(100) NOT NULL,
+    JOB_KEY VARCHAR(32) NOT NULL,
+    constraint JOB_INST_UN unique (JOB_NAME, JOB_KEY)
+) ;
+CREATE TABLE BATCH_JOB_EXECUTION  (
+    JOB_EXECUTION_ID BIGINT  NOT NULL PRIMARY KEY ,
+    VERSION BIGINT  ,
+    JOB_INSTANCE_ID BIGINT NOT NULL,
+    CREATE_TIME TIMESTAMP NOT NULL,
+    START_TIME TIMESTAMP DEFAULT NULL ,
+    END_TIME TIMESTAMP DEFAULT NULL ,
+    STATUS VARCHAR(10) ,
+    EXIT_CODE VARCHAR(2500) ,
+    EXIT_MESSAGE VARCHAR(2500) ,
+    LAST_UPDATED TIMESTAMP,
+    constraint JOB_INST_EXEC_FK foreign key (JOB_INSTANCE_ID)
+    references BATCH_JOB_INSTANCE(JOB_INSTANCE_ID)
+) ;
+CREATE TABLE BATCH_JOB_EXECUTION_PARAMS  (
+    JOB_EXECUTION_ID BIGINT NOT NULL ,
+    PARAMETER_NAME VARCHAR(100) NOT NULL ,
+    PARAMETER_TYPE VARCHAR(100) NOT NULL ,
+    PARAMETER_VALUE VARCHAR(2500) ,
+    IDENTIFYING CHAR(1) NOT NULL ,
+    constraint JOB_EXEC_PARAMS_FK foreign key (JOB_EXECUTION_ID)
+    references BATCH_JOB_EXECUTION(JOB_EXECUTION_ID)
+) ;
+CREATE TABLE BATCH_STEP_EXECUTION  (
+    STEP_EXECUTION_ID BIGINT  NOT NULL PRIMARY KEY ,
+    VERSION BIGINT NOT NULL,
+    STEP_NAME VARCHAR(100) NOT NULL,
+    JOB_EXECUTION_ID BIGINT NOT NULL,
+    CREATE_TIME TIMESTAMP NOT NULL,
+    START_TIME TIMESTAMP DEFAULT NULL ,
+    END_TIME TIMESTAMP DEFAULT NULL ,
+    STATUS VARCHAR(10) ,
+    COMMIT_COUNT BIGINT ,
+    READ_COUNT BIGINT ,
+    FILTER_COUNT BIGINT ,
+    WRITE_COUNT BIGINT ,
+    READ_SKIP_COUNT BIGINT ,
+    WRITE_SKIP_COUNT BIGINT ,
+    PROCESS_SKIP_COUNT BIGINT ,
+    ROLLBACK_COUNT BIGINT ,
+    EXIT_CODE VARCHAR(2500) ,
+    EXIT_MESSAGE VARCHAR(2500) ,
+    LAST_UPDATED TIMESTAMP,
+    constraint JOB_EXEC_STEP_FK foreign key (JOB_EXECUTION_ID)
+    references BATCH_JOB_EXECUTION(JOB_EXECUTION_ID)
+) ;
+CREATE TABLE BATCH_STEP_EXECUTION_CONTEXT  (
+    STEP_EXECUTION_ID BIGINT NOT NULL PRIMARY KEY,
+    SHORT_CONTEXT VARCHAR(2500) NOT NULL,
+    SERIALIZED_CONTEXT TEXT ,
+    constraint STEP_EXEC_CTX_FK foreign key (STEP_EXECUTION_ID)
+    references BATCH_STEP_EXECUTION(STEP_EXECUTION_ID)
+) ;
+CREATE TABLE BATCH_JOB_EXECUTION_CONTEXT  (
+    JOB_EXECUTION_ID BIGINT NOT NULL PRIMARY KEY,
+    SHORT_CONTEXT VARCHAR(2500) NOT NULL,
+    SERIALIZED_CONTEXT TEXT ,
+    constraint JOB_EXEC_CTX_FK foreign key (JOB_EXECUTION_ID)
+    references BATCH_JOB_EXECUTION(JOB_EXECUTION_ID)
+) ;
+CREATE SEQUENCE BATCH_STEP_EXECUTION_SEQ MAXVALUE 9223372036854775807 NO CYCLE;
+CREATE SEQUENCE BATCH_JOB_EXECUTION_SEQ MAXVALUE 9223372036854775807 NO CYCLE;
+CREATE SEQUENCE BATCH_JOB_SEQ MAXVALUE 9223372036854775807 NO CYCLE;
+```
+Para conferir se as tabelas foram criadas corretamente, digite \d no terminal do postgres:
+``` bash
+postgres=# \d
+                      List of relations
+ Schema |             Name             |   Type   |  Owner
+--------+------------------------------+----------+----------
+ public | batch_job_execution          | table    | postgres
+ public | batch_job_execution_context  | table    | postgres
+ public | batch_job_execution_params   | table    | postgres
+ public | batch_job_execution_seq      | sequence | postgres
+ public | batch_job_instance           | table    | postgres
+ public | batch_job_seq                | sequence | postgres
+ public | batch_step_execution         | table    | postgres
+ public | batch_step_execution_context | table    | postgres
+ public | batch_step_execution_seq     | sequence | postgres
+(9 rows)
+postgres=#
+```
+
+Em seguida, configure a conexão da aplicação Spring Batch, com o Postgres, no arquivo application.properties do projeto Spring Boot. Confira se o usuário e senha configurados no banco de dados, correspondem aos configurados no application.properties
+``` bash
+spring.datasource.url=jdbc:postgresql://localhost:5432/postgres
+spring.datasource.username=postgres
+spring.datasource.password=postgres
+```
