@@ -75,7 +75,7 @@ Criaremos um novo projeto, com as dependências **Spring Batch** e  **PostgresSQ
 ![image](https://github.com/user-attachments/assets/6f480050-850f-450c-bad3-65630bc8268b)
 
 Será necessário criar um container docker, ou uma nova database no Postgres, para rodarmos nosso primeiro Job com Spring Batch.
-Para instruções de como criar um container, veja aqui (Link para aulas Docker)[].
+Para instruções de como criar um container, veja aqui [Link para aulas Docker]().
 
 Com o projeto criado, crie uma nova classe chamada **BillingJobConfiguration.java** conforme abaixo:
 ``` java
