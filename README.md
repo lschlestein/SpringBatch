@@ -42,10 +42,15 @@ O diagrama de entidade-relacionamento a seguir apresenta as principais tabelas d
 ![image](https://github.com/user-attachments/assets/be300a5e-e433-40da-b48c-8bfde16e39cf)
 
 **Job_Instance:** Esta tabela contém todas as informações relevantes para uma definição de trabalho, como o nome do trabalho e sua chave de identificação.
+
 **Job_Execution:** Esta tabela contém todas as informações relevantes para a execução de um job, como o horário de início, horário de término e status. Toda vez que um job é executado, uma nova linha é inserida nesta tabela.
+
 **Job_Execution_Context:** Esta tabela contém o contexto de execução de um job. Um contexto de execução é um conjunto de pares de chave/valor de informações de tempo de execução que normalmente representa o estado que deve ser recuperado após uma falha.
+
 **Step_Execution:** Esta tabela contém todas as informações relevantes para a execução de uma etapa, como hora de início, hora de término, contagem de itens lidos e contagem de itens gravados. Toda vez que uma etapa é executada, uma nova linha é inserida nesta tabela.
+
 **Step_Execution_Context:** Esta tabela contém o contexto de execução de uma etapa. É semelhante à tabela que contém o contexto de execução de um job, mas, em vez disso, armazena o contexto de execução de uma etapa.
+
 **Job_Execution_Params:** Esta tabela contém os parâmetros de tempo de execução de uma tarefa.
 
 ### Arquitetura do Spring Batch
