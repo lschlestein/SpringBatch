@@ -67,10 +67,10 @@ Esta arquitetura em camadas destaca três principais componentes de alto nível:
 
 A camada *Application*: contém o trabalho em lote e o código personalizado escrito pelos desenvolvedores do aplicativo em lote.
 A camada *Batch Core*: contém as classes de tempo de execução principais fornecidas pelo Spring Batch que são necessárias para criar e controlar trabalhos em lote. Ela inclui implementações para *Job* e *Step*, bem como serviços comuns como *JobLauncher* e *JobRepository*.
-A camda *Batch Infrastructure*: contém readers e writters de itens comuns fornecidos pelo Spring Batch, além de serviços básicos, como mecanismos de repetição e nova tentativa, que são usados ​​tanto por desenvolvedores de aplicativos quanto pela própria estrutura principal.
+A camada *Batch Infrastructure*: contém readers e writters de itens comuns fornecidos pelo Spring Batch, além de serviços básicos, como mecanismos de repetição e nova tentativa, que são usados ​​tanto por desenvolvedores de aplicativos quanto pela própria estrutura principal.
 Como desenvolvedor do Spring Batch, você normalmente usa APIs fornecidas pelo Spring Batch nos módulos *Batch Infrastructure* e *Batch Core* para definir seus trabalhos e etapas na camada *Application*. O Spring Batch fornece uma rica biblioteca de componentes de lote que você pode usar imediatamente (como itens readers, itens writters, particionadores de dados e dentre outros).
 
-# Prática
+# Prática - 1
 Criaremos um novo projeto, com as dependências **Spring Batch** e  **PostgresSQL Driver**
 ![image](https://github.com/user-attachments/assets/6f480050-850f-450c-bad3-65630bc8268b)
 
@@ -203,7 +203,7 @@ spring.datasource.password=postgres
 ```
 Nesse ponto, a aplicação deve iniciar normalmente se tudo estiver configurado corretamente.
 
-### Compreendendo os jobs e como executá-los
+### 2-Compreendendo os jobs e como executá-los
 Como já visto anteriomente a *Job* é uma entidade que encapsula um processo em lote inteiro que é executado do início ao fim sem interação ou interrupção. Nesta lição, você aprenderá como Jobs são representados internamente no Spring Batch, entenderá como eles são iniciados e entenderá como seus metadados de execução são persistidos.
 
 **O que é um Job?**
@@ -221,3 +221,159 @@ Em um nível fundamental, a interface Job requer que as implementações especif
 O método *execute* fornece uma referência a um objeto *JobExecution*. O *JobExecution* representa a execução real do *Job* em tempo de execução. Ele contém uma série de detalhes de tempo de execução, como o horário de início, o horário de término, o status da execução e assim por diante. Essas informações de tempo de execução são armazenadas pelo Spring Batch em um repositório de metadados, conforme configurado anteriormente.
 
 Observe que o método *execute* não lanca nenhuma exceção. Exceções de tempo de execução devem ser manipuladas por implementações e adicionadas no objeto *JobExecution*. Os clientes podem inspecionar o o status da *JobExecution* para determinar se Job foi executada com sucesso ou falha.
+
+### Compreendendo os metadados do job
+Um dos principais conceitos do Spring Batch é o *JobRepository*. O *JobRepository* é onde todos os metadados sobre trabalhos (jobs) e etapas são armazenados. Um *JobRepository* pode ser um armazenamento persistente ou um armazenamento na memória. Um armazenamento persistente tem a vantagem de fornecer metadados mesmo após a *Job* ser concluída, o que pode ser usado para pós-análise ou para reiniciar um *Job* no caso de uma falha.
+
+O Spring Batch fornece uma implementação JDBC do *JobRepository*, que armazena metadados de lote em um banco de dados relacional. Em um sistema de nível de produção, você precisa criar algumas tabelas que o Spring Batch usa para armazenar seus metadados de execução, conforme visto anteriormente.
+
+O *JobRepository* é o que cria um objeto *JobExecution* quando a *Job* é iniciado pela primeira vez. Veremos como iniciar um Job a seguir:
+
+### Lançando um Job
+
+Para iniciar uma *job* no Spring Batch utiliza-se o conceito do *JobLauncher*, que é representado pela seguinte interface:
+
+``` java
+public interface JobLauncher {
+
+   JobExecution run(Job job, JobParameters jobParameters)
+          throws
+             JobExecutionAlreadyRunningException,
+             JobRestartException,
+             JobInstanceAlreadyCompleteException,
+             JobParametersInvalidException;
+}
+```
+O método *run* é projetado para iniciar um dado *Job* com um conjunto de *JobParameters*. Abordaremos os *JobParameters* em seguida. Por enquanto, você pode pensar neles como uma coleção de pares de chave/valor que são passados ​​para o *Job* em tempo de execução.
+
+A interface *JobLauncher* raramente será implementada sozinha, porque o Spring Batch fornece uma implementação pronta para uso dela. O diagrama a seguir mostra como o *JobLauncher*, o *JobRepository* e o *Job* interagem entre si.
+![image](https://github.com/user-attachments/assets/0502249b-b275-4e11-a337-ab6588039609)
+
+As *Jobs* podem ser iniciadas ou por linha de comando ou via web container. Veremos somente através da linha comando.
+
+# Prática - 2
+Com base no projeto anterior, criaremos nosso primeiro Job.
+No projeto anteriormente criado crie a classe BillingJob.java no diretório src/main/java/example/billingjob conforme segue:
+
+``` java
+ackage example.billingjob;
+
+import org.springframework.batch.core.Job;
+import org.springframework.batch.core.JobExecution;
+
+public class BillingJob implements Job {
+
+    @Override
+    public String getName() {
+        return BillingJob;
+    }
+
+    @Override
+    public void execute(JobExecution execution) {
+       System.out.println("processing billing information");
+    }
+}
+```
+
+Logo em seguida precisamos configura a Bean do Job, criado anteriormente.
+``` java
+package example.billingjob;
+
+import org.springframework.batch.core.Job;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class BillingJobConfiguration {
+    @Bean
+    public Job job() {
+        return new BillingJob();
+    }
+}
+```
+
+Para saber se o Job foi configurado e executado corretament, a informação *processing billing information* deverá ser exibida no console.
+É possível verificar se o *Job* foi executado junto ao Postgres conforme segue:
+
+```bash
+docker exec postgres psql -U postgres -c 'select * from BATCH_JOB_EXECUTION;'
+```
+
+
+Dessa forma, o *Job* está pronto para ser executado.
+
+Provavelmente haverá o registro do *Job* junto a tabela BATCH_JOB_EXECUTION. Para adicionarmos os status corretamente a essa tabela precisamos reconfigurar a classe BillingJob.java
+
+``` java
+package example.billingjob;
+
+import org.springframework.batch.core.BatchStatus;
+import org.springframework.batch.core.ExitStatus;
+import org.springframework.batch.core.Job;
+import org.springframework.batch.core.JobExecution;
+import org.springframework.batch.core.repository.JobRepository;
+
+public class BillingJob implements Job {
+
+    private JobRepository jobRepository;
+
+    public BillingJob(JobRepository jobRepository) {
+        this.jobRepository = jobRepository;
+    }
+
+    @Override
+    public String getName() {
+        return "BillingJob";
+    }
+
+    @Override
+    public void execute(JobExecution execution) {
+        System.out.println("processing billing information");
+        execution.setStatus(BatchStatus.COMPLETED);
+        execution.setExitStatus(ExitStatus.COMPLETED);
+        this.jobRepository.update(execution);
+    }
+}
+```
+
+Como visto acima, primeiramente é passado o referência do *JobRepository* via construtor da classe.
+Em seguida o código do método execute, foi alterado para indicar os status corretos e em seguida é feito o update na jobRepository.
+O status do *Job* indicada os possiveís estados da execução do trabalho em si. Por exemplo, se o *Job* iniciou o status é *BatchStatus.STARTED*. Caso falhe *BatchStatus.FAILED*, equando concluído *BatchStatus.COMPLETED*.
+No código acima, admitimos que nosso trabalho terminou com sucesso *BatchStatus.COMPLETED* e também que terminou com sucesso *ExitStatus.COMPLETED*.
+Como a implementação do *Job* agora faz o uso de um *JobRepository* é preciso forncer um *JobRepository* em nossa definição da bean *Job*. Devemos agora alterar a nossa classe BillingJobConfiguration.java
+
+``` java
+package example.billingjob;
+
+import org.springframework.batch.core.Job;
+import org.springframework.batch.core.repository.JobRepository;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class BillingJobConfiguration {
+
+    @Bean
+    public Job job(JobRepository jobRepository) {
+        return new BillingJob(jobRepository);
+    }
+}
+```
+Thanks to Spring Boot, a JobRepository was autoconfigured with the datasource configured for our PostgreSQL database.
+
+This JobRepository is ready for us to use by autowiring it in our Job bean.
+
+Clean up and re-run the Job.
+
+Now let's try to re-run the Job and check its status in the database.
+
+But before re-running the Job, let's clean the database up to cut the noise of the previous run. In the Terminal tab, run the following commands:
+
+[~/exercises] $ scripts/drop-create-database.sh
+Now re-run the Job as shown before and check the database. The execution status as well as the exit status should now be COMPLETED.
+
+...
+2023-05-03T21:21:07.939Z  INFO 7458 --- [           main] o.s.b.c.l.support.SimpleJobLauncher      : Job: [example.billingjob.BillingJob@66f0548d] completed with the following parameters: [{}] and the following status: [COMPLETED]
+If the Job's status is COMPLETED, then congratulations! You successfully created, configured and run your first Spring Batch Job!
+
+Now the question is: what happens if an error occurs while performing the business logic?
