@@ -652,3 +652,51 @@ Como visto anteriormente, raramente será necessário implementar a interface *J
 
 **FlowJob:** Para fluxos de etapas complexos, incluindo ramificação condicional e execução paralela. Veja a documentação aqui [Fluxos Condicionais](https://docs.spring.io/spring-batch/docs/5.0.4/reference/html/step.html#conditionalFlow) e [Fluxos Paralelos](https://docs.spring.io/spring-batch/docs/5.0.4/reference/html/step.html#split-flows)
 
+### O SimpleJob
+A classe *SimpleJob* é projetada para compor um trabalho como uma sequência de etapas. Uma etapa deve ser concluída com sucesso para que a próxima etapa na sequência seja iniciada. Se uma etapa falhar, o trabalho será imediatamente encerrado e as etapas subsequentes não serão executadas. É possível criar um fluxo sequencial de etapas usando a API *JobBuilder*. Aqui está um exemplo com duas etapas:
+
+``` java
+@Bean
+public Job myJob(JobRepository jobRepository, Step step1, Step step2) {
+  return new JobBuilder("job", jobRepository)
+    .start(step1)
+    .next(step2)
+    .build();
+}
+```
+
+Acima, o job (myJob) é definido como uma sequência de duas etapas, step1 e step2. O job começa com step1 e move para step2 somente se step1 for concluído com sucesso. Se step1 falhar, o job será encerrado e step2 não será executado.
+
+### Como criar steps?
+Semelhante à API *JobBuilder*, o Spring Batch fornece a API *StepBuilder* para permitir que você crie diferentes tipos de etapas. Todos os tipos de etapas compartilham algumas propriedades comuns (como o nome da etapa, o repositório de tarefas para relatar metadados e outros), mas cada tipo de etapa tem suas próprias propriedades específicas. Por esse motivo, o Spring Batch fornece um construtor específico para cada tipo de etapa (TaskletStepBuilder, PartitionedStepBuilder, e outros).
+
+Aqui está um exemplo que cria um *TaskletStep*:
+
+``` java
+@Bean
+public Step taskletStep(JobRepository jobRepository, Tasklet tasklet, PlatformTransactionManager transactionManager) {
+  return new StepBuilder("step1", jobRepository)
+    .tasklet(tasklet, transactionManager)
+    .build();
+}
+```
+Neste exemplo, definimos o step como um Spring bean. A *StepBuilder* aceita o nome do passo e o repositório de trabalho, pois eles são comuns a todos os tipos de step.
+
+Depois disso, chamamos o método *StepBuilder.tasklet*, que usará a *TaskletStepBuilder* para definir ainda mais propriedades específicas do *TaskletStep*, principalmente o *Tasklet* para executar como parte da etapa e o gerenciador de transações para usar para transações. Observe como não usamos o *TaskletStepBuilder* diretamente.
+
+O padrão é similar se, por exemplo, você quiser criar um passo particionado. Aqui está um exemplo para criar um *PartitionedStep*:
+``` java
+@Bean
+public Step partitionedtStep(JobRepository jobRepository, Partitioner partitioner) {
+  return new StepBuilder("step1", jobRepository)
+    .partitioner("worker", partitioner)
+    .build();
+}
+```
+
+### Compreendendo os metadados de etapas
+Semelhante aos metadados de nível de trabalho, que são armazenados na tabela *BATCH_JOB_EXECUTION*, o Spring Batch armazena metadados de nível de etapa na tabela *BATCH_STEP_EXECUTION*. Isso inclui o horário de início da etapa, seu horário de término, seu status de execução e outros detalhes.
+
+Outra similaridade com o nível de trabalho é o contexto de execução. Cada etapa tem um contexto de execução, que nada mais é do que um conjunto de pares de chave/valor para armazenar informações de tempo de execução sobre a execução da etapa. Isso inclui o tipo de etapa, o tipo de tasklet se a etapa for um *TaskletStep* e outros detalhes. O contexto também pode registrar o progresso de uma etapa, como contagem de leitura de itens, contagem de gravação de itens e outras métricas. Esses pares de chave/valor podem ser usados ​​para reiniciar uma etapa de onde parou, em caso de falha.
+
+Por padrão, uma etapa bem-sucedida não é re-executada ao reiniciar uma instância de trabalho com falha. No entanto, em algumas situações, mesmo uma etapa bem-sucedida deve ser re-executada ao tentar novamente uma instância de trabalho. O Spring Batch torna isso possível por meio do parâmetro *StepBuilder.allowStartIfComplete*. Você também pode limitar o número de vezes que uma etapa é reiniciada usando o parâmetro *StepBuilder.startLimit*.
