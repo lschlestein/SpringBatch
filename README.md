@@ -557,3 +557,20 @@ Deverá ser apresentada a seguinte saída.
 ``` terminal
 processing billing information from file src/main/resources/billing-2023-01.csv
 ```
+
+Caso deseje, tente executar novamente o "Job" com o mesmo arquivo, e um erro ocorrerá, pois, essa instância já foi executada anteriormente.
+
+Para confirmar as execuções anteriormente executadas, verifique no postgres:
+``` sql
+docker exec postgres psql -U postgres -c 'select * from BATCH_JOB_INSTANCE;'
+```
+
+Verifique as execuções em sua respectiva tabela:
+``` sql
+docker exec postgres psql -U postgres -c 'select * from BATCH_JOB_EXECUTION;'
+```
+É possível também verificar os parâmetros utlizados:
+``` sql
+docker exec postgres psql -U postgres -c 'select * from BATCH_JOB_EXECUTION_PARAMS;'
+```
+Para cada Execução, os parâmetros são gravados na tabela.
