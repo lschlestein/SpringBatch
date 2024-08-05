@@ -700,3 +700,91 @@ Semelhante aos metadados de nível de trabalho, que são armazenados na tabela *
 Outra similaridade com o nível de trabalho é o contexto de execução. Cada etapa tem um contexto de execução, que nada mais é do que um conjunto de pares de chave/valor para armazenar informações de tempo de execução sobre a execução da etapa. Isso inclui o tipo de etapa, o tipo de tasklet se a etapa for um *TaskletStep* e outros detalhes. O contexto também pode registrar o progresso de uma etapa, como contagem de leitura de itens, contagem de gravação de itens e outras métricas. Esses pares de chave/valor podem ser usados ​​para reiniciar uma etapa de onde parou, em caso de falha.
 
 Por padrão, uma etapa bem-sucedida não é re-executada ao reiniciar uma instância de trabalho com falha. No entanto, em algumas situações, mesmo uma etapa bem-sucedida deve ser re-executada ao tentar novamente uma instância de trabalho. O Spring Batch torna isso possível por meio do parâmetro *StepBuilder.allowStartIfComplete*. Você também pode limitar o número de vezes que uma etapa é reiniciada usando o parâmetro *StepBuilder.startLimit*.
+
+# Prática - 4
+
+Veremos nessa prática como se dá a implementação do primeiro step, com Spring Batch.
+Precisaremos copiar os arquivos contidos na /src/main/resources/billing-2023-01.csv para um novo diretório /staging.
+
+### Implementar a FilePreparationTasklet
+Criar a classe FilePreparationTaksklet.java na src/main/java/example/billingjob conforme segue:
+```java
+package example.billingjob;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+
+import org.springframework.batch.core.JobParameters;
+import org.springframework.batch.core.StepContribution;
+import org.springframework.batch.core.scope.context.ChunkContext;
+import org.springframework.batch.core.step.tasklet.Tasklet;
+import org.springframework.batch.repeat.RepeatStatus;
+
+public class FilePreparationTasklet implements Tasklet {
+
+    @Override
+    public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {
+        JobParameters jobParameters = contribution.getStepExecution().getJobParameters();
+        String inputFile = jobParameters.getString("input.file");
+        Path source = Paths.get(inputFile);
+        Path target = Paths.get("staging", source.toFile().getName());
+        Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+        return RepeatStatus.FINISHED;
+    }
+}
+```
+Nessa clase a interface *Tasklet* é implementada para adquirir o arquivo de entrada dos parâmetros do *job*, e fazer uma cópia desses arquivos para o diretório de staging.
+Observe como é usado a opção StandardCopyOption.REPLACE_EXISTING, para cópia do arquivo, configurando para que caso haja algum arquivo no destino, que o mesmo seja substituído. Isso é útil caso o *step* seja re-executado e seja desejado que a operação seja concluída com sucesso, ao invés de falha devido a já existir um arquivo existente.
+
+Agora podemos definir a *TaskletStep*.
+
+Alterar o src/main/java/example/billingjob/BillingJobConfiguration.java e adicionar a seguinte *Bean* conforme segue:
+``` java
+@Bean
+public Step step1(JobRepository jobRepository, JdbcTransactionManager transactionManager) {
+    return new StepBuilder("filePreparation", jobRepository)
+            .tasklet(new FilePreparationTasklet(), transactionManager)
+            .build();
+}
+```
+Nessa porção de código, foi definida uma *bean* chamada step1, do tipo *Step*
+Foi passada a referência de um *JobRepository* para a step, e uma *JdbcTransactionManager* para a tasklet. Essa transacition manager é auto-configurada pelo Spring Boot, podendo assim ser usada para define a *TaskletStep*.
+
+Vale lembrar que uma *TaskletStep* precisa de uma gerenciador de transações para orquestrar a transação de cada iteração da *Tasklet*. A *TaskletStep* é definida pela chamada ao *StepBuilder.tasklet* para o qual é passada uma instância do *FilePreparationTasklet* e o gerenciador de transações para gerenciar as transações.
+
+Em seguida modificar a configuração do Job.
+Alterar a BillingJobConfiguration.java, substituindo a bean job, existente nessa classe.
+
+``` java
+public Job job(JobRepository jobRepository, Step step1) {
+    return new JobBuilder("BillingJob", jobRepository)
+            .start(step1)
+            .build();
+```
+Neste trecho, substituímos a criação de uma instância *BillingJob* pelo uso da API *JobBuilder* para criar o trabalho.
+Passamos o nome do trabalho e uma referência a um *JobRepository*.
+Depois disso, chamamos o método *JobBuilder.start* que cria um fluxo de trabalho sequencial e espera a primeira etapa da sequência.
+No nosso caso, a primeira etapa é a etapa *filePreparation* que definimos como *step 1* anteriormente.
+
+Feito isso, podemos agora remover a classe BillingJob.java, implementada anteriormente.
+
+Feito isso é possível empacator e rodar a aplicação novamente.
+Empacotar o projeto com o maven
+``` bash
+./mvnw package -Dmaven.test.skip=true
+```
+
+Em seguida rodar o Jar criado, como segue:
+``` bash
+java -jar target/billing-job-0.0.1-SNAPSHOT.jar input.file=src/main/resources/billing-2023-01.csv
+```
+Após a execução da aplicação, o arquivo billing-2023-01.csv deverá ter sido copiado para o staging, indicando que o processo configurado funcionou corretamente.
+
+É possível verificar os metadados salvos pela aplicação, na tabela *BATCH_STEP_EXECUTION*.
+
+Executar no terminal:
+``` java
+docker exec postgres psql -U postgres -c 'select * from BATCH_STEP_EXECUTION;'
+```
