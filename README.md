@@ -574,3 +574,68 @@ docker exec postgres psql -U postgres -c 'select * from BATCH_JOB_EXECUTION;'
 docker exec postgres psql -U postgres -c 'select * from BATCH_JOB_EXECUTION_PARAMS;'
 ```
 Para cada Execução, os parâmetros são gravados na tabela.
+
+# Compreendendo os Steps
+
+### O que é um Step
+Na vida cotidiana, frequentemente falamos sobre dar passos. Um passo no caminho. Um passo na direção certa.
+
+O Spring Batch também tem etapas. A *Step* é um objeto de domínio que encapsula uma fase independente e sequencial de um *batch Job*. Ele contém todas as informações necessárias para definir uma unidade de trabalho em um *batch Job*.
+
+A *Step* no Spring Batch é representado pela interface *Step*e fornecida pela dependência *spring-batch-core*:
+``` java
+public interface Step {
+
+  String getName();
+
+  void execute(StepExecution stepExecution) throws JobInterruptedException;
+}
+```
+Semelhante à interface *Job*, a interface *Step* requer, em um nível fundamental, uma implementação para especificar o nome da etapa (o método getName()) e o que a etapa deve fazer (o método execute).
+
+O método *execute* fornece uma referência a um objeto *StepExecution*. O *StepExecution* representa a execução real da etapa no tempo de execução. Ele contém vários detalhes do tempo de execução, como o horário de início, o horário de término, o status da execução e assim por diante. Essas informações de tempo de execução são armazenadas pelo Spring Batch no repositório de metadados, semelhante ao *JobExecution*, como vimos anteriormente.
+
+O método *execute* foi projetado para gerar uma exceção *JobInterruptedException* caso o trabalho seja interrompido naquela etapa específica.
+
+### Quais são os diferentes tipos de passos (steps)?
+
+Embora seja possível implementar a interface *Step* manualmente para definir a lógica de uma etapa, o Spring Batch fornece implementações diferentes para casos de uso comuns. Todas essas implementações derivam da classe AbstractStep base que fornece os requisitos comuns, como definir o horário de início, horário de término de uma etapa, atualizar o status de saída da etapa, persistir os metadados da etapa no repositório de tarefas, etc.
+
+Os tipos de *Step​​* mais usados são os seguintes:
+
+**TaskletStep:** Projetado para tarefas simples (como copiar um arquivo ou criar um arquivo) ou tarefas orientadas a itens (como ler um arquivo ou uma tabela de banco de dados).
+
+**PartitionedStep:** Projetado para processar o conjunto de dados de entrada em partições.
+
+**FlowStep:** Útil para agrupar logicamente etapas em fluxos.
+
+**JobStep:** Semelhante a um, *FlowStep* mas na verdade cria e inicia uma execução de trabalho separada para as etapas no fluxo especificado. Isso é útil para criar um fluxo complexo de trabalhos e subtrabalhos.
+
+O diagrama a seguir explica a hierarquia e a relação entre esses diferentes tipos de Steps.
+![image](https://github.com/user-attachments/assets/19760155-5122-4525-b7fa-29d5020e80dd)
+
+Nos aprofundaremos no TaskletStep
+
+### O TakskletStep
+O *TaskletStep* é uma implementação da interface *Step* baseada no conceito da *Tasklet*. A *Tasklet* representa uma unidade de trabalho que o *Step* deve fazer quando invocado. A interface *Tasklet* é definida como segue:
+
+``` java
+@FunctionalInterface
+public interface Tasklet {
+
+  @Nullable
+  RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception;
+}
+```
+
+O método *execute* desta interface funcional é projetado para conter uma iteração da lógica de negócios de um *TaskletStep*. Há alguns elementos-chave para entender:
+
+* O tipo de retorno do método *execute* é do tipo *RepeatStatus*. Esta é uma enumeração que é usada para sinalizar ao framework que o trabalho foi concluído (RepeatStatus.FINISHED), ou não concluído ainda (RepeatStatus.CONTINUABLE). Neste último caso, o *TaskletStep* invoca *Tasklet* novamente.
+* Cada iteração do *Tasklet* é executada no escopo de uma transação de banco de dados. Dessa forma, o Spring Batch salva o trabalho que foi feito durante a iteração no repositório de tarefas persistentes. Dessa forma, a etapa pode continuar de onde parou, em caso de falha. Por esse motivo, o *TaskletStep* requer um *PlatformTransactionManager* para gerenciar a transação do *Tasklet*.
+* O método execute fornece uma referência a um objeto *StepContribution*, que representa a contribuição deste *Tasklet* para a etapa (por exemplo, quantos itens foram lidos, gravados ou processados ​​de outra forma) e uma referência a um objeto *ChunkContext*, que é um conjunto de pares chave/valor que fornecem detalhes sobre o contexto de execução do *Tasklet*.
+O método *execute* foi projetado para lançar uma exceção se ocorrer algum erro durante o processamento. Nesse caso, a etapa será marcada como falha.
+O Spring Batch fornece diversas implementações da interface *Tasklet* para casos de uso comuns:
+
+**ChunkOrientedTasklet:** Projetado para conjuntos de dados orientados a itens, como um arquivo simples ou tabela de banco de dados.
+**SystemCommandTasklet:** Permite que você invoque um comando do Sistema Operacional dentro do Tasklet.
+**Outros:**. Veja a [documentação](https://docs.spring.io/spring-batch/reference/index.html) de referência do Spring Batch para mais detalhes.
