@@ -788,3 +788,160 @@ Executar no terminal:
 ``` java
 docker exec postgres psql -U postgres -c 'select * from BATCH_STEP_EXECUTION;'
 ```
+# Lendo e Escrevendo Dados
+### Compreendendo o modelo de processamento orientado a blocos (Chunk-Oriented)
+Ingerir um arquivo em uma tabela de banco de dados parece uma tarefa simples e fácil à primeira vista, mas essa tarefa simples é, na verdade, bem desafiadora! E se o arquivo de entrada for grande o suficiente para não caber na memória? E se o processo que ingere o arquivo for encerrado abruptamente no meio do caminho? Como lidamos com essas situações de forma eficiente e tolerante a falhas?
+
+O Spring Batch vem com um modelo de processamento que é projetado e implementado para lidar com esses desafios. Ele é chamado de modelo de processamento orientado a pedaços (Chunk-Oriented). A ideia desse modelo é processar a fonte de dados em blocos (Chunks) de um tamanho configurável.
+
+Um chunk é uma coleção de "itens" da fonte de dados. Um item pode ser uma linha em um arquivo simples, um registro em uma tabela de banco de dados, etc.
+
+Um pedaço de itens é representado pela API *Chunk<T>*, que é um wrapper em torno de uma lista de objetos do tipo "T". O tipo genérico "T" representa o tipo de itens. Isso significa que os itens podem ser de qualquer tipo.
+```java
+public class Chunk<T> implements Iterable<T> {
+
+   private List<T> items;
+
+   // methods to add and get items
+}
+```
+
+### Transações
+Cada pedaço de itens é lido e escrito dentro do escopo de uma transação. Dessa forma, os pedaços são confirmados juntos ou revertidos juntos, o que significa que todos eles são bem-sucedidos ou falham juntos. Você pode pensar nisso como uma abordagem "tudo ou nada", mas apenas para o pedaço específico que está sendo processado.
+
+Se a transação for confirmada, o Spring Batch registra, como parte da transação, o progresso da execução (contagem de leituras, contagem de gravações, etc.) em seu repositório de metadados e usa essas informações para reiniciar de onde parou em caso de falha.
+
+Se ocorrer um erro durante o processamento de um bloco de itens, a transação será revertida pelo framework. Portanto, o estado de execução não será atualizado e o Spring Batch reiniciará do último ponto de salvamento bem-sucedido em caso de falha.
+
+O número de itens a serem incluídos em um bloco é chamado de intervalo de confirmação , que é o tamanho configurável de um bloco que deve ser processado dentro do escopo de uma única transação.
+
+## Lendo Dados
+Ler dados de um arquivo simples é diferente de ler dados de uma tabela de banco de dados ou de uma fila de broker de mensagens. Por esse motivo, o Spring Batch fornece uma interface de estratégia para ler itens de forma consistente e independente de implementação.
+
+### A interface ItemReader
+A leitura de dados no Spring Batch é feita por meio da interface ItemReader, que é definida da seguinte forma:
+
+``` java
+@FunctionalInterface
+public interface ItemReader<T> {
+   @Nullable
+   T read() throws Exception;
+}
+```
+Esta interface funcional fornece um único método chamado read para ler um pedaço de dados, ou um item. Cada chamada para este método deve retornar um único item, um de cada vez.
+
+O Spring Batch chamará read conforme necessário para criar blocos de itens. Dessa forma, o Spring Batch nunca carrega a fonte de dados inteira na memória, apenas blocos de dados.
+
+O tipo de item T é genérico, então cabe à implementação decidir qual tipo de item será retornado.
+
+### Manipulação de erros
+Se ocorrer um erro durante a leitura de um item, espera-se que as implementações gerem uma exceção para sinalizar o erro ao framework.
+
+Observe como o método read é anotado com *@Nullable*, o que significa que ele pode retornar null.
+
+``` java
+@Nullable
+T read() throws Exception;
+```
+
+Um retorno null desse método é a maneira de sinalizar para o framework que a fonte de dados está esgotada. Lembre-se, o processamento em lote é sobre processar conjuntos de dados finitos, não fluxos infinitos de dados.
+
+### A biblioteca ItemReader
+O Spring Batch vem com uma grande biblioteca de implementações ItemReader para ler dados de uma variedade de fontes de dados, como arquivos, bancos de dados, corretores de mensagens, etc. Como desenvolvedor do Spring Batch, normalmente você só precisará configurar um desses leitores e usá-lo em uma etapa.
+
+Em seguida um exemplo para configurar o FlatFileItemReader:
+``` java
+@Bean
+public FlatFileItemReader<BillingData> billingDataFileReader() {
+    return new FlatFileItemReaderBuilder<BillingData>()
+            .name("billingDataFileReader")
+            .resource(new FileSystemResource("staging/billing-data.csv"))
+            .delimited()
+            .names("dataYear", "dataMonth", "accountId", "phoneNumber", "dataUsage", "callDuration", "smsCount")
+            .targetType(BillingData.class)
+            .build();
+}
+```
+Neste exemplo, um bean do tipo *FlatFileItemReader* que retorna itens do tipo *BillingData*. Este tipo representa um item do arquivo de dados de cobrança. Para construir um FlatFileItemReader, usaremos a API *FlatFileItemReaderBuilder* para especificar o caminho do arquivo de entrada, os campos esperados naquele arquivo e o tipo de destino para mapear os dados.
+
+A menos que você tenha um requisito muito específico para implementar um leitor de item personalizado, você deve ser capaz de aproveitar um dos leitores de item fornecidos pelo Spring Batch prontos para uso, conforme mostrado acima. Para outros tipos de leitores de itens veja a [documentação](https://docs.spring.io/spring-batch/docs/5.0.4/reference/html/appendix.html#itemReadersAppendix)
+
+## Escrevendo Dados
+Semelhante à interface *ItemReader*, a gravação de dados com o Spring Batch é feita por meio da interface *ItemWriter*, que é definida da seguinte forma:
+
+``` java
+@FunctionalInterface
+public interface ItemWriter<T> {
+
+   void write(Chunk<? extends T> chunk) throws Exception;
+}
+```
+
+### Escrevendo pedaços (chunks)
+O método *write* espera um pedaço de itens. Ao contrário da leitura de itens, que é feita um item por vez, a escrita de itens é feita em pedaços. O motivo para isso é que gravações em massa são tipicamente mais eficientes do que gravações únicas.
+
+Por exemplo, o *JdbcBatchItemWriter*, que é projetado para gravar itens em uma tabela de banco de dados relacional, dispara a API JDBC Batch  para inserir itens no modo batch. Isso não seria possível se a interface *ItemWriter* fosse projetada para gravar um item por vez.
+
+O Spring Batch fornece várias implementações da interface *ItemWriter* para gravar dados em uma variedade de alvos, como arquivos, bancos de dados e corretores de mensagens. Para documentação de outros escritores veja a [documentação](https://docs.spring.io/spring-batch/docs/5.0.4/reference/html/appendix.html#itemWritersAppendix)
+
+Observação: se ocorrer um erro ao escrever itens, espera-se que as implementações desta interface gerem uma exceção para sinalizar o problema ao framework.
+
+### Exemplo ItemWriter
+Para a primeira etapa do nosso trabalho de *Billing*, precisamos gravar dados em uma tabela de banco de dados relacional, então usaremos um *JdbcBatchItemWriter* para isso. Aqui está um exemplo de como configurar tal gravador:
+
+``` java
+@Bean
+public JdbcBatchItemWriter<BillingData> billingDataTableWriter(DataSource dataSource) {
+    String sql = "insert into BILLING_DATA values (:dataYear, :dataMonth, :accountId, :phoneNumber, :dataUsage, :callDuration, :smsCount)";
+    return new JdbcBatchItemWriterBuilder<BillingData>()
+            .dataSource(dataSource)
+            .sql(sql)
+            .beanMapped()
+            .build();
+}
+```
+Acima note como o  *JdbcBatchItemWriter* é construído usando construções específicas de banco de dados, como uma instrução SQL e um DataSource. Considere que outros escritores, como *FlatFileItemWriter*, seriam construídos usando construções que são específicas para essas implementações.
+
+### Configurando etapas de tasklet orientadas a blocos
+Uma etapa orientada a bloco (chunk) no Spring Batch é uma *TaskletStep* configurada com um tipo de *Tasklet* específico, o *ChunkOrientedTasklet*. Essa "Tasklet" que implementa o modelo de processamento orientado a blocos (chunk), usando um leitor de itens (item reader) e um escritor de itens (item writter).
+
+Semelhante à configuração de um *TaskletStep* com uma *tasklet* personalizada, a configuração de um *tasklet* orientado a blocos também é feita por meio da API *StepBuilder*, exceto que precisaremos chamar o método *chunk* ao invés do método *tasklet*.
+
+### Ingestão de arquivo
+A etapa de ingestão de arquivo tem como objetivo ler dados de um arquivo simples e gravá-los em um banco de dados relacional. Portanto, supondo que o *FlatFileItemReader<BillingData>* e *JdbcBatchItemWriter<BillingData>* mostrados anteriormente, veja como configurar a etapa (step):
+
+``` java
+@Bean
+public Step ingestFile(
+              JobRepository jobRepository,
+              PlatformTransactionManager transactionManager,
+              FlatFileItemReader<BillingData> billingDataFileReader,
+              JdbcBatchItemWriter<BillingData> billingDataTableWriter) {
+
+    return new StepBuilder("fileIngestion", jobRepository)
+            .<BillingData, BillingData>chunk(100, transactionManager)
+            .reader(billingDataFileReader)
+            .writer(billingDataTableWriter)
+            .build();
+}
+```
+Como visto anteriormente, precisaremos especificar o nome do passo e o repositório de trabalho. Isso é comum para todos os tipos de passo (step). Como estamos criando uma *TaskletStep* orientada a bloco (chunk-oriented), precisaremos fornecer dois parâmetros:
+
+O primeiro parâmetro é o tamanho do bloco *(chunk-size)*, ou o *commit-interval*. Neste caso, ele é definido como 100, o que significa que o Spring Batch lerá e gravará 100 itens como uma unidade em cada transação.
+O segundo parâmetro é uma referência a a *PlatformTransactionManager* para gerenciar as transações do *tasklet*. Lembre-se, cada chamada a *Tasklet.execute* é feita dentro do escopo de uma transação.
+Por fim, a API *StepBuilder.chunk*  orienta o usuário a configurar melhor o *tasklet* orientado a blocos, especificando o leitor e o gravador de itens a serem usados ​​por meio dos métodos *reader* e *writer* respectivamente.
+
+# Pratica - 5
+
+Antes de começar, é importante explanar sobre o arquivo a ser manipulado nessa prática.
+Compreendendo o arquivo *billing-2023-01.csv*
+
+|Column	            |Type	|Description
+|-------------------|-------|--------------------------------------------------------
+|Year	            |int	|The year during which the data was captured for the customer
+|Month	            |int	|The month during which the data was captured for the customer
+|Account Identifier	|int	|The account identifier associated with the customer
+|Phone Number	    |String	|The phone number that the usage is associated with
+|Data Usage	        |float	|The sum of data used for the month in MB
+|Call Duration	    |int	|The sum of calls used for the month in minutes
+|SMS Count	        |int	|The number of text messages sent during the month
