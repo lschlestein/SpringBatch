@@ -525,5 +525,35 @@ No exemplo do *Job EndOfDay* , os parâmetros podem ser definidos na tabela a se
 
 Agora a questão é: Por que isso é importante e como é usado no Spring Batch? Identificar *JobParameters* desempenha um papel crucial no caso de falha. Em um ambiente de produção, onde centenas de *JobInstances* estão em execução e uma delas falha, precisamos de uma maneira de identificar qual instância falhou. É aqui que os parâmetros de identificação dos *Jobs* são essenciais. Quando um *JobExecution* para uma dada *JobInstance*, iniciar o mesmo trabalho com o mesmo conjunto de JobParameters de identificação criará um novo *JobExecution* (ou seja, uma nova tentativa) para o mesmo *JobInstance*.
 
+# Prática - 3
 
+Veremos nessa prática a forma de passarmos parâmetros para um *Job* e também, como criar uma *JobInstance*.
+Nesse exemplo, iremos processar o faturamento mensal de uma empresa hipotética. Os dados serão lidos de um arquivo .CSV. O nome do arquivo será utilizado com identificador do *Job*. Dessa forma, teremos uma *JobInstance* distinta para cada mês.
 
+Os arquivos estão no diretório src/resources do projeto.
+Modificaremos o método *execute* da classe BillingJob.java conforme segue:
+``` java
+ @Override
+ public void execute(JobExecution execution) {
+     JobParameters jobParameters = execution.getJobParameters();
+     String inputFile = jobParameters.getString("input.file");
+     System.out.println("processing billing information from file " + inputFile);
+     execution.setStatus(BatchStatus.COMPLETED);
+     execution.setExitStatus(ExitStatus.COMPLETED);
+     this.jobRepository.update(execution);
+ }
+```
+Logo em seguida empacotar o projeto com o maven
+``` bash
+./mvnw package -Dmaven.test.skip=true
+```
+
+Em seguida rodar o Jar criado, como segue:
+``` bash
+java -jar target/billing-job-0.0.1-SNAPSHOT.jar input.file=src/main/resources/billing-2023-01.csv
+```
+
+Deverá ser apresentada a seguinte saída.
+``` terminal
+processing billing information from file src/main/resources/billing-2023-01.csv
+```
