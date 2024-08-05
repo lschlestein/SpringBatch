@@ -23,6 +23,8 @@ Você pode usar o Spring Batch em casos de uso simples (como carregar um arquivo
 
 O Spring Batch integra-se perfeitamente com outras tecnologias Spring, o que o torna uma excelente escolha para escrever aplicativos em lote com Spring.
 
+## Configura a etapa de ingestão de arquivos
+
 ### Liguagem de domínio em lote
 
 Os conceitos chave do modelo de domínio do Spring Batch, são representados a seguir:
@@ -1020,7 +1022,6 @@ docker exec postgres psql -U postgres -c 'select count(*) from BILLING_DATA;'
 ```
 
 ### Criar o billingDataTableWriter.
-
 Como utilizaremos uma conexão JDBC para escrever nossos dados, o escritor de item ou, item writer mais adequado a ser utilizado é o *JdbcBatchItemWriter<T>*. Esse item writer escreverá dados em um BD via API JDBC.
 
 Alterar o BillingJobConfiguration.java, adicionando o seguinte bean:
@@ -1047,3 +1048,66 @@ Também definimos a instrução SQL insert que o escritor *(writter)* deve invoc
 Mas como o criador do item vincularia os dados dos objetos BillingData criados pelo leitor às colunas da tabela usando a sintaxe :fieldName?
 
 É aqui que entra em ação a chamada para o método *.beanMapped()*. Este método instrui o escritor a usar a API Java Reflection para chamar métodos getter para obter o valor de cada campo com o mesmo nome da coluna do banco de dados. Por exemplo, para vincular a coluna :dataYear na consulta SQL, o gravador chamará dataYear() na instância *BillingData* do item atual.
+
+## Configurar a etapa de ingestão de arquivos
+Agora, o próximo passo, será definir o passo (step) de ingestão de arquivo.
+
+Alterar o BillingJobConfiguration.java, adicionando o seguinte bean:
+``` java
+@Bean
+public Step step2(
+   JobRepository jobRepository, JdbcTransactionManager transactionManager,
+   ItemReader<BillingData> billingDataFileReader, ItemWriter<BillingData> billingDataTableWriter) {
+    return new StepBuilder("fileIngestion", jobRepository)
+            .<BillingData, BillingData>chunk(100, transactionManager)
+            .reader(billingDataFileReader)
+            .writer(billingDataTableWriter)
+            .build();
+}
+```
+### O Step-2 em detalhes (ingestion step)
+
+Como visto anteriormente, todos os tipos de etapas exigem pelo menos o repositório de tarefas e o nome da etapa. Neste caso, o repositório de tarefas é passado como parâmetro para o método de definição do bean e o nome da etapa é fileIngestion.
+
+Como está sendo criada uma etapa orientada a bloco *(chunk-oriented)*, que é um *TaskletStep*, precisamos também passar uma referência para um gerenciador de transações e especificar o tamanho do bloco *(chunk)*, que neste caso é 100. Isso é feito chamando o método .chunk(...).
+
+A sintaxe <BillingData,BillingData>chunk(...) é usada para informar ao Spring Batch que a entrada e a saída da etapa são do tipo *BillingData*, o que significa que o leitor retornará itens do tipo *BillingData* e que o escritor *(writter)* escreverá itens do tipo *BillingData* também.
+
+Ou seja, esta etapa não altera o tipo de itens durante sua execução. Os objetos lidos e escritos são do mesmo tipo. É possível alterar o tipo de item caso os dados devam ser transformados durante o processamento. 
+
+Atenção: O valor do tamanho do bloco depende muito do caso de uso e deve ser definido de forma empírica. O valor 100 geralmente é um bom ponto de partida, mas nem sempre é esse o caso.
+
+Por fim, definimos o item leitor e gravador usando os métodos .reader() e .writer() respectivamente. O leitor e o gravador são passados ​​como parâmetros para o método de definição de bean, o que significa que eles serão conectados automaticamente pelo Spring a partir das definições de bean que configuramos nas seções anteriores.
+
+## Rodando o Job
+
+Antes de rodar o *Job* novamente, é necessário definir a sequência de passos no bean *Job*. Precisamos alterar o *Job* adicionando mais um passo *(step)*, conforme segue:
+Alterar a classe BillingJobConfiguration.java
+``` java
+@Bean
+public Job job(JobRepository jobRepository, Step step1, Step step2) {
+    return new JobBuilder("BillingJob", jobRepository)
+            .start(step1)
+            .next(step2)
+            .build();
+}
+```
+Em comparação com a versão anterior, adicionamos *step2* ao fluxo sequencial usando a chamada do método .next(step2). Com isso, o Spring Batch executará a etapa *fileIngestion* após a etapa *filePreparation*. Vamos executar o trabalho e verificar isso a seguir:
+
+No terminal, empacotar e rodar a aplicação.
+``` bash
+./mvnw clean package -Dmaven.test.skip=true
+```
+
+Em seguida executar o jar:
+``` bash
+java -jar target/billing-job-0.0.1-SNAPSHOT.jar input.file=src/main/resources/billing-2023-01.csv
+```
+
+No log, as step1 (filePreparation) e step2 (fileIngestion) deverão ser executadas:
+
+Os dados agora devem ter sido inseridos no banco de dados:
+``` bash
+docker exec postgres psql -U postgres -c 'select count(*) from BILLING_DATA;'
+```
+Deverão ser retornadas 1000 linhas, ou registros no select acima.
