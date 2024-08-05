@@ -643,3 +643,12 @@ O Spring Batch fornece diversas implementações da interface *Tasklet* para cas
 **SystemCommandTasklet:** Permite que você invoque um comando do Sistema Operacional dentro do Tasklet.
 
 **Outros:**. Veja a [documentação](https://docs.spring.io/spring-batch/reference/index.html) de referência do Spring Batch para mais detalhes.
+
+## Utilizando Steps
+### Utilizando Steps para definir o fluxo de execução de um Job
+Como visto anteriormente, raramente será necessário implementar a interface *Job* manualmente, como fizemos. Na verdade, o Spring Batch fornece a classe  *AbstractJob* que permite que você defina seu "Job" como um fluxo de "Steps". Esta classe tem duas variações:
+
+**SimpleJob:** Para execução sequencial de etapas.
+
+**FlowJob:** Para fluxos de etapas complexos, incluindo ramificação condicional e execução paralela. Veja a documentação aqui [Fluxos Condicionais](https://docs.spring.io/spring-batch/docs/5.0.4/reference/html/step.html#conditionalFlow) e [Fluxos Paralelos](https://docs.spring.io/spring-batch/docs/5.0.4/reference/html/step.html#split-flows)
+
