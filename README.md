@@ -486,7 +486,7 @@ A *JobInstance* é uma parametrização única de um determinado *Job*. Por exem
 A *JobInstance* é distinta de outras *JobInstances* por um parâmetro específico, ou um conjunto de parâmetros. Por exemplo, um parâmetro chamado *schedule.date* especificaria um dia específico. Tal parâmetro é chamado de *JobParameter*. *JobParameters* são o que distingue uma *JobInstance* da outra. O diagrama a seguir mostra como *JobParameters*  define *JobInstances*:
 ![image](https://github.com/user-attachments/assets/2d3cf090-a91f-4e62-9ccf-ca98f8962f41)
 
-# O que as Instâcias dos Jobs e os seus Parâmetros representam?
+### O que as Instâcias dos Jobs e os seus Parâmetros representam?
 
 *JobInstances* são distintos entre si por *JobParameters* distintos. Esses parâmetros geralmente representam os dados que se pretende processar por um dado *JobInstance*. Por exemplo, no caso do *Job EndOfDay*, o *JobParameter* *schedule.date* para 1º de janeiro define a *JobInstance* que processará os dados de 1º de janeiro. O *JobParameter* *schedule.date* para 2 de janeiro define o *JobInstance* que processará os dados de 2 de janeiro, e assim por diante.
 
@@ -498,16 +498,32 @@ Uma data específica: Neste caso, teríamos uma *JobInstance* data específica.
 Um arquivo específico: Neste caso, teríamos um *JobInstance* por arquivo.
 Um intervalo específico de registros em uma tabela de banco de dados relacional: Nesse caso, teríamos um *JobInstance* por intervalo.
 
-# Como as Jobs Instances se relacionam com as Execuções das Jobs?
+### Como as Jobs Instances se relacionam com as Execuções das Jobs?
 A *JobExecution* se refere ao conceito técnico de uma única tentativa de executar um *JobInstance*. Como visto na anteriormente, a *JobExecution* pode terminar em sucesso ou falha. No caso do *Job EndOfDay*, se a execução de 1º de janeiro falhar na primeira vez e for executada novamente no dia seguinte, ainda será a execução de 1º de janeiro. Portanto, cada *JobInstance* pode ter vários *JobExecutions*.
 
 A relação entre os conceitos de *Job*, *JobInstance*, *JobParameters*, e *JobExecution* é apresentada a seguir:
 ![image](https://github.com/user-attachments/assets/8636792b-d227-42bc-b56e-58a434e0f8d0)
 
-Abaixo temos um diagrama do ciclo de vida de uma *JobInstanceno* no caso de um  *Job EndOfDay*:
+Abaixo temos um diagrama do ciclo de vida de uma *JobInstance* no caso de um  *Job EndOfDay*:
 ![image](https://github.com/user-attachments/assets/82a728cb-1410-410c-90ba-c3e4660961a1)
 
 No Spring Batch, uma *JobInstance* não é considerada completa a menos que a *JobExecution* seja concluída com sucesso. A *JobInstance* que é concluída não pode ser reiniciada novamente. Esta é uma escolha de design para evitar o reprocessamento acidental dos mesmos dados para batch *Jobs* que não são idempotentes.
+
+### Os diferentes tipos de parâmetros de um Job
+*JobParameters* são normalmente usados ​​para distinguir uma *JobInstance* de outra. Em outras palavras, eles são usados ​​para identificar um *JobInstance*.
+
+Nem todos os parâmetros podem ser usados ​​para identificar *JobInstances*. Por exemplo, se o *Job EndOfDay* pega outro parâmetro - digamos, file.format) - que representa o formato do arquivo de saída (CSV, XML e outros), esse parâmetro não representa realmente os dados a serem processados, então, ele pode ser excluído do processo de identificação das *Jobinstâncias*.
+
+É aqui que os *JobParameter* não identificadores entram em cena. No Spring Batch, *JobParameters* pode ser identificador ou não identificador. Um *JobParameter* identificador contribui para a identificação de uma *JobInstance*, enquanto um não identificador não. Por padrão, *JobParameters* são identificadores, e o Spring Batch fornece APIs para especificar se o *JobParameter* é identificador ou não.
+
+No exemplo do *Job EndOfDay* , os parâmetros podem ser definidos na tabela a seguir:
+
+|Job parameter|Identificador?|Exemplo   |
+|-------------|--------------|----------|
+|schedule.date|	Yes          |2023-01-01|
+|file.format  |	No	         |csv       |
+
+Agora a questão é: Por que isso é importante e como é usado no Spring Batch? Identificar *JobParameters* desempenha um papel crucial no caso de falha. Em um ambiente de produção, onde centenas de *JobInstances* estão em execução e uma delas falha, precisamos de uma maneira de identificar qual instância falhou. É aqui que os parâmetros de identificação dos *Jobs* são essenciais. Quando um *JobExecution* para uma dada *JobInstance*, iniciar o mesmo trabalho com o mesmo conjunto de JobParameters de identificação criará um novo *JobExecution* (ou seja, uma nova tentativa) para o mesmo *JobInstance*.
 
 
 
