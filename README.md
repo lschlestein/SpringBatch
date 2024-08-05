@@ -945,3 +945,16 @@ Compreendendo o arquivo *billing-2023-01.csv*
 |Data Usage	        |float	|The sum of data used for the month in MB
 |Call Duration	    |int	|The sum of calls used for the month in minutes
 |SMS Count	        |int	|The number of text messages sent during the month
+
+Exemplo de dados contidos no arquivo *billing-2023-01.csv*
+|Year	|Month	|Account N. |Phone Number	|Data Usage	|Call Duration	|SMS Count
+|-------|-------|-----------|---------------|-----------|---------------|---------
+|2023	|1	    |100	    |404-555-1234	|12.5	    |0	            |3
+|2023	|1	    |101	    |404-555-5678	|7.8	    |5	            |1
+|2023	|1	    |102	    |404-555-9101	|45.2	    |2	            |0
+|2023	|1	    |104	    |404-555-2345	|22.1	    |0            	|1
+|2023	|1	    |105	    |404-555-6789	|8.9	    |10	            |0
+|2023	|1	    |106	    |404-555-1112	|3.2	    |3	            |2
+|2023	|1	    |107	    |404-555-1314	|17.6	    |0	            |4
+|2023	|1	    |108	    |404-555-1516	|28.9	    |7	            |1
+|2023	|1	    |109	    |404-555-1718	|11.3	    |2	            |3
