@@ -470,18 +470,33 @@ CREATE SEQUENCE BATCH_STEP_EXECUTION_SEQ MAXVALUE 9223372036854775807 NO CYCLE;
 CREATE SEQUENCE BATCH_JOB_EXECUTION_SEQ MAXVALUE 9223372036854775807 NO CYCLE;
 CREATE SEQUENCE BATCH_JOB_SEQ MAXVALUE 9223372036854775807 NO CYCLE;
 ```
-
-Clean up and re-run the Job.
-
-Now let's try to re-run the Job and check its status in the database.
-
-But before re-running the Job, let's clean the database up to cut the noise of the previous run. In the Terminal tab, run the following commands:
-
-[~/exercises] $ scripts/drop-create-database.sh
-Now re-run the Job as shown before and check the database. The execution status as well as the exit status should now be COMPLETED.
-
-...
+Agora o status COMPLETED deverá ser mostrado.
+``` bash
 2023-05-03T21:21:07.939Z  INFO 7458 --- [           main] o.s.b.c.l.support.SimpleJobLauncher      : Job: [example.billingjob.BillingJob@66f0548d] completed with the following parameters: [{}] and the following status: [COMPLETED]
-If the Job's status is COMPLETED, then congratulations! You successfully created, configured and run your first Spring Batch Job!
+```
 
-Now the question is: what happens if an error occurs while performing the business logic?
+# Instâncias de Jobs
+
+### O Que São Instâncias de Jobs
+
+Um *Job* pode ser definido uma vez, mas provavelmente será executado diversas vezes, geralmente em um intervalo definido. No Spring Batch, a *Job* é a definição genérica de um processo em lote especificado por um desenvolvedor. Essa definição genérica deve ser parametrizada para criar instâncias reais de um *Job*, que são chamadas *JobInstances*.
+
+A *JobInstance* é uma parametrização única de um determinado *Job*. Por exemplo, imagine um processo em lote que precisa ser executado uma vez no final de cada dia, ou quando um determinado arquivo estiver presente. No cenário de uma vez por dia, podemos usar o Spring Batch para criar um *Job EndOfDay* nesse caso. Haveria uma única definição *Job EndOfDay*, mas várias instâncias do mesmo *Job*, uma por dia. Cada instância processaria os dados de um dia específico e poderia ter um resultado diferente (sucesso ou falha) de outras instâncias. Portanto, cada instância individual do *Job* deve ser rastreada separadamente.
+
+A *JobInstance* é distinta de outras *JobInstances* por um parâmetro específico, ou um conjunto de parâmetros. Por exemplo, um parâmetro chamado *schedule.date* especificaria um dia específico. Tal parâmetro é chamado de *JobParameter*. *JobParameters* são o que distingue uma *JobInstance* da outra. O diagrama a seguir mostra como *JobParameters*  define *JobInstances*:
+![image](https://github.com/user-attachments/assets/2d3cf090-a91f-4e62-9ccf-ca98f8962f41)
+
+# O que as JobsInstances e os JobsParameters representam?
+
+*JobInstances* são distintos entre si por *JobParameters* distintos. Esses parâmetros geralmente representam os dados que se pretende processar por um dado *JobInstance*. Por exemplo, no caso do *Job EndOfDay*, o *JobParameter* *schedule.date* para 1º de janeiro define a *JobInstance* que processará os dados de 1º de janeiro. O *JobParameter* *schedule.date* para 2 de janeiro define o *JobInstance* que processará os dados de 2 de janeiro, e assim por diante.
+
+Embora não seja necessário que os *Job Parameters* representem os dados a serem processados, é uma boa prática - para projetar *JobInstances* corretamente. Projetar *JobInstances* para representar os dados a serem processados acaba sendo mais fácil de configurar, testar e pensar, em caso de falha.
+
+A definição de a *JobInstance* em si não tem absolutamente nenhuma relação com os dados a serem carregados. Depende inteiramente da implementação do *Job* em determinar como os dados são carregados, com base em *JobParameters*. Aqui estão alguns exemplos de *JobParameters* e como eles representam os dados a serem processados ​​pela *JobInstance*:
+
+Uma data específica: Neste caso, teríamos uma *JobInstance* data específica.
+Um arquivo específico: Neste caso, teríamos um *JobInstance* por arquivo.
+Um intervalo específico de registros em uma tabela de banco de dados relacional: Nesse caso, teríamos um *JobInstance* por intervalo.
+
+
+
