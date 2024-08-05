@@ -634,8 +634,12 @@ O método *execute* desta interface funcional é projetado para conter uma itera
 * Cada iteração do *Tasklet* é executada no escopo de uma transação de banco de dados. Dessa forma, o Spring Batch salva o trabalho que foi feito durante a iteração no repositório de tarefas persistentes. Dessa forma, a etapa pode continuar de onde parou, em caso de falha. Por esse motivo, o *TaskletStep* requer um *PlatformTransactionManager* para gerenciar a transação do *Tasklet*.
 * O método execute fornece uma referência a um objeto *StepContribution*, que representa a contribuição deste *Tasklet* para a etapa (por exemplo, quantos itens foram lidos, gravados ou processados ​​de outra forma) e uma referência a um objeto *ChunkContext*, que é um conjunto de pares chave/valor que fornecem detalhes sobre o contexto de execução do *Tasklet*.
 O método *execute* foi projetado para lançar uma exceção se ocorrer algum erro durante o processamento. Nesse caso, a etapa será marcada como falha.
+
+
 O Spring Batch fornece diversas implementações da interface *Tasklet* para casos de uso comuns:
 
 **ChunkOrientedTasklet:** Projetado para conjuntos de dados orientados a itens, como um arquivo simples ou tabela de banco de dados.
+
 **SystemCommandTasklet:** Permite que você invoque um comando do Sistema Operacional dentro do Tasklet.
+
 **Outros:**. Veja a [documentação](https://docs.spring.io/spring-batch/reference/index.html) de referência do Spring Batch para mais detalhes.
