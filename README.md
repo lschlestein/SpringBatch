@@ -1019,6 +1019,31 @@ Para verificar se a tabela foi criada corretamente executar no terminal:
 docker exec postgres psql -U postgres -c 'select count(*) from BILLING_DATA;'
 ```
 
-### Create the billingDataTableWriter.
+### Criar o billingDataTableWriter.
 
-Since we are writing data to a JDBC datasource, the most convenient item writer to use is the JdbcBatchItemWriter<T>. This item writer is designed to write items to a database using the JDBC API. Let's configure such a writer.
+Como utilizaremos uma conexão JDBC para escrever nossos dados, o escritor de item ou, item writer mais adequado a ser utilizado é o *JdbcBatchItemWriter<T>*. Esse item writer escreverá dados em um BD via API JDBC.
+
+Alterar o BillingJobConfiguration.java, adicionando o seguinte bean:
+
+``` java
+@Bean
+public JdbcBatchItemWriter<BillingData> billingDataTableWriter(DataSource dataSource) {
+    String sql = "insert into BILLING_DATA values (:dataYear, :dataMonth, :accountId, :phoneNumber, :dataUsage, :callDuration, :smsCount)";
+    return new JdbcBatchItemWriterBuilder<BillingData>()
+            .dataSource(dataSource)
+            .sql(sql)
+            .beanMapped()
+            .build();
+}
+```
+
+### O JdbcBatchItemWriter em Detalhes
+O JdbcBatchItemWriter precisa conhecer o banco de dados de destino para gravar dados e a instrução SQL para executar.
+
+No trecho anterior, definimos um bean denominado *billingDataTableWriter* do tipo *JdbcBatchItemWriter<BillingData>*. A fonte de dados foi passada como parâmetro para o método, que representa o banco de dados de destino no qual os dados devem ser armazenados.
+
+Também definimos a instrução SQL insert que o escritor *(writter)* deve invocar para inserir itens. Esta instrução especifica a tabela de destino *BILLING_DATA* criada anteriormente e também a lista de colunas a serem inseridas. Observe como a lista de colunas (:dataYear, :dataMonth, etc) corresponde aos nomes dos campos do tipo *BillingData*.
+
+Mas como o criador do item vincularia os dados dos objetos BillingData criados pelo leitor às colunas da tabela usando a sintaxe :fieldName?
+
+É aqui que entra em ação a chamada para o método *.beanMapped()*. Este método instrui o escritor a usar a API Java Reflection para chamar métodos getter para obter o valor de cada campo com o mesmo nome da coluna do banco de dados. Por exemplo, para vincular a coluna :dataYear na consulta SQL, o gravador chamará dataYear() na instância *BillingData* do item atual.
