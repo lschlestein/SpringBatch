@@ -958,3 +958,67 @@ Exemplo de dados contidos no arquivo *billing-2023-01.csv*
 |2023	|1	    |107	    |404-555-1314	|17.6	    |0	            |4
 |2023	|1	    |108	    |404-555-1516	|28.9	    |7	            |1
 |2023	|1	    |109	    |404-555-1718	|11.3	    |2	            |3
+
+### Configurando um Item Reader
+Como o arquivo de entrada é simples, deve-se utilizar FlatFileItemReader<T>. Esse leitor suporta vários tipos de arquivos delimitados simples como (CSV, TSC, etc). Embora seja possível retornar arrays de Strings ou matrizes, para retornar uma classe, que representará cada item. Para o exemplo específico, a classe BillingData.java será escrita como segue:
+``` java
+package example.billingjob;
+
+public record BillingData (
+        int dataYear,
+        int dataMonth,
+        int accountId,
+        String phoneNumber,
+        float dataUsage,
+        int callDuration,
+        int smsCount) {
+}
+```
+O tipo Record representa um record, ou melhor, uma linha do arquivo de entrada. Note que os tipos do Record, são compatíveis com os tipos oriundos do arquivo de entrada.
+
+### Criar o billingDataFileReader
+Alterar o BillingJobConfiguration.java, adicionando o seguinte bean:
+```java
+@Bean
+public FlatFileItemReader<BillingData> billingDataFileReader() {
+    return new FlatFileItemReaderBuilder<BillingData>()
+            .name("billingDataFileReader")
+            .resource(new FileSystemResource("staging/billing-2023-01.csv"))
+            .delimited()
+            .names("dataYear", "dataMonth", "accountId", "phoneNumber", "dataUsage", "callDuration", "smsCount")
+            .targetType(BillingData.class)
+            .build();
+}
+```
+
+Neste trecho, definimos um bean denominado *billingDataFileReader* do tipo *FlatFileItemReader<BillingData>*. Usamos *FlatFileItemReaderBuilder* para criar o leitor e especificamos algumas propriedades, como o nome do leitor e o arquivo de entrada staging/billing-2023-01.csv.
+
+Também informamos ao leitor que se espera que o arquivo de entrada seja delimitado (usando o método .delimited()) e que se espera que as colunas sejam definidas em uma ordem específica, que corresponde à lista de campos (.names(... )) no tipo de destino BillingData.
+
+Com isso definido, o leitor de item lerá as linhas uma por uma e criará uma nova instância de BillingData para cada linha.
+
+Observe como, com apenas algumas linhas de código de configuração, o Spring Batch realmente nos economizou muito código padrão para ler o arquivo de entrada (abrir/fechar o arquivo), ler o arquivo linha por linha, analisar campos e mapear dados para tipos correspondentes em Billing Data.
+
+### Configurando um Item Writer
+Criar a tabela onde os dados importados serão armazenados:
+``` sql
+create table BILLING_DATA
+(
+    DATA_YEAR     INTEGER,
+    DATA_MONTH    INTEGER,
+    ACCOUNT_ID    INTEGER,
+    PHONE_NUMBER  VARCHAR(12),
+    DATA_USAGE    FLOAT,
+    CALL_DURATION INTEGER,
+    SMS_COUNT     INTEGER
+);
+```
+
+Para verificar se a tabela foi criada corretamente executar no terminal:
+``` bash
+docker exec postgres psql -U postgres -c 'select count(*) from BILLING_DATA;'
+```
+
+### Create the billingDataTableWriter.
+
+Since we are writing data to a JDBC datasource, the most convenient item writer to use is the JdbcBatchItemWriter<T>. This item writer is designed to write items to a database using the JDBC API. Let's configure such a writer.
