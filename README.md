@@ -532,8 +532,9 @@ Agora a questão é: Por que isso é importante e como é usado no Spring Batch?
 Veremos nessa prática a forma de passarmos parâmetros para um *Job* e também, como criar uma *JobInstance*.
 Nesse exemplo, iremos processar o faturamento mensal de uma empresa hipotética. Os dados serão lidos de um arquivo .CSV. O nome do arquivo será utilizado com identificador do *Job*. Dessa forma, teremos uma *JobInstance* distinta para cada mês.
 
-Os arquivos estão no diretório src/resources do projeto.
-Modificaremos o método *execute* da classe BillingJob.java conforme segue:
+Adicionar os arquivos billing-2023-01.csv e billing-2023-02.csv  que estão no diretório resources do projeto.
+
+Modificar o método *execute* da classe BillingJob.java conforme segue:
 ``` java
  @Override
  public void execute(JobExecution execution) {
