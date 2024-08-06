@@ -366,6 +366,14 @@ public class BillingJobConfiguration {
 }
 ```
 É necessário limpar a base de dados e rodar novamento o Job.
+Em seguida, acesse o terminal do postgres
+``` bash
+docker exec -it postgres psql -U postgres
+```
+Conectado ao terminal, criei o seguinte esquema de tabelas conforme abaixo:
+
+ou
+
 Execute no terminal o seguinte comando
 ``` bash
 scripts/drop-create-database.sh
