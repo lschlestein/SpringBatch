@@ -1052,22 +1052,7 @@ public JdbcBatchItemWriter<BillingData> billingDataTableWriter(DataSource dataSo
             .build();
 }
 ```
-### Gerando o relatório de faturamento
-Para gerar o relatório, dos clientes anteriormente filtrados, utilizaremos o *FlatFileItemWriter* forncedido pelo Spring Batch.
 
-### Adicionando o bean FlatFileItemWriter ao Job
-Na classe *FlatFileItemWriter.java* adicione o seguinte bean, como segue:
-```java
-@Bean
-public FlatFileItemWriter<ReportingData> billingDataFileWriter() {
-        return new FlatFileItemWriterBuilder<ReportingData>()
-            .resource(new FileSystemResource("staging/billing-report-2023-01.csv"))
-            .name("billingDataFileWriter")
-            .delimited()
-            .names("billingData.dataYear", "billingData.dataMonth", "billingData.accountId", "billingData.phoneNumber", "billingData.dataUsage", "billingData.callDuration", "billingData.smsCount", "billingTotal")
-            .build();
-}
-```
 ### O JdbcBatchItemWriter em Detalhes
 O JdbcBatchItemWriter precisa conhecer o banco de dados de destino para gravar dados e a instrução SQL para executar.
 
@@ -1354,6 +1339,23 @@ Conforme mencionado anteriormente, o relatório de faturamento é um arquivo sim
 
 Para geração desse relatório de faturamento, utilizaremos o *FlatFileItemWriter* do prórpio Spring Batch.
 
+
+### Gerando o relatório de faturamento
+Para gerar o relatório, dos clientes anteriormente filtrados, utilizaremos o *FlatFileItemWriter* forncedido pelo Spring Batch.
+
+### Adicionando o bean FlatFileItemWriter ao Job AJUSTAR
+Na classe *FlatFileItemWriter.java* adicione o seguinte bean, como segue:
+```java
+@Bean
+public FlatFileItemWriter<ReportingData> billingDataFileWriter() {
+        return new FlatFileItemWriterBuilder<ReportingData>()
+            .resource(new FileSystemResource("staging/billing-report-2023-01.csv"))
+            .name("billingDataFileWriter")
+            .delimited()
+            .names("billingData.dataYear", "billingData.dataMonth", "billingData.accountId", "billingData.phoneNumber", "billingData.dataUsage", "billingData.callDuration", "billingData.smsCount", "billingTotal")
+            .build();
+}
+```
 ### Adicionando a bean FlatFileItemWriter ao BillingJobConfiguration
 Na classe BillingJobConfiguration.java, adicione a seguinte bean, como segue:
 ``` java
