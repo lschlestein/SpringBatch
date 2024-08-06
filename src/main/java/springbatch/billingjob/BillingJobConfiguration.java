@@ -1,2 +1,8 @@
-package springbatch.billingjob;public class BillingJobConfiguration {
+package springbatch.billingjob;
+
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class BillingJobConfiguration {
+    //Todo code
 }
