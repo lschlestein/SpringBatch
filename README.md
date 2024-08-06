@@ -761,10 +761,12 @@ Em seguida modificar a configuração do Job.
 Alterar a BillingJobConfiguration.java, substituindo a bean job, existente nessa classe.
 
 ``` java
+@Bean
 public Job job(JobRepository jobRepository, Step step1) {
     return new JobBuilder("BillingJob", jobRepository)
             .start(step1)
             .build();
+}
 ```
 Neste trecho, substituímos a criação de uma instância *BillingJob* pelo uso da API *JobBuilder* para criar o trabalho.
 Passamos o nome do trabalho e uma referência a um *JobRepository*.
