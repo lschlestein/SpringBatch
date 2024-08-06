@@ -1111,3 +1111,104 @@ Os dados agora devem ter sido inseridos no banco de dados:
 docker exec postgres psql -U postgres -c 'select count(*) from BILLING_DATA;'
 ```
 Deverão ser retornadas 1000 linhas, ou registros no select acima.
+
+# Processando Dados
+
+Anteriormente configuramos as etapas orientadas a blocos, buscando dados em um arquivo simples .CSV, e os "movemos" para uma banco de dados. Embora essa seja uma operação comum, é raro não haver nenhum tipo de processamento sobre os dados, antes de serem persistidos.
+
+Aboradaremos agora esse processamento é feito, utilizando Spring Batch.
+
+### A API ItemProcessor
+O processamento de itens em uma etapa orientada a blocos *(chunk-oriented)* acontece entre a leitura e a gravação de dados. É uma fase opcional do modelo de processamento orientado a bloco, onde os itens retornados pelo leitor são processados ​​e, em seguida, entregues ao escritor.
+
+O processamento de itens no Spring Batch é feito implementando a interface *ItemProcessor*, que é definida da seguinte forma:
+``` java
+@FunctionalInterface
+public interface ItemProcessor<I, O> {
+
+   @Nullable
+   O process(@NonNull I item) throws Exception;
+}
+```
+Esta é uma interface funcional com um único método *process*. Este método pega um item do tipo *I* como entrada e retorna um item do tipo *O* como saída. O nome do método *process* é genérico de propósito, pois o processamento de dados é um termo amplo e abrange diferentes casos de uso, como transformar dados, enriquecê-los, validá-los ou filtrar os dados.
+
+### Transformando Dados
+O método *process* pega um item do tipo *I* como entrada e retorna um item do tipo *O* como saída. Essa distinção clara entre tipos de entrada e saída é projetada para permitir que os desenvolvedores alterem o tipo do item durante a fase de processamento. Isso é útil ao adaptar os dados de entrada ao formato esperado pelo sistema de destino.
+
+Aqui está um exemplo de um processador de itens que transforma itens de um tipo hipotético *BillingData* para outro tipo *ReportingData*:
+``` java
+public class BillingDataProcessor implements ItemProcessor<BillingData, ReportingData> {
+
+   public ReportingData process(BillingData item) {
+       return new ReportingData(item);
+   }
+}
+```
+Embora seja possível alterar o tipo de item durante o processamento, e se não precisarmos disso? Ou seja, e se o tipo de entrada *I* for o mesmo que o tipo de saída *O*? Isso é perfeitamente possível, conforme veremos em seguida.
+
+### Enriquecendo Dados
+Transformar dados não é o único caso de uso de um *ItemProcessor*. Na verdade, itens não são necessariamente transformados de um tipo para outro.
+
+Em muitos trabalhos de processamento em lote, o requisito é enriquecer os dados de entrada com detalhes adicionais antes de os persistir no sistema de destino. Nesse caso, os itens não são transformados de um tipo para outro, mas enriquecidos com informações adicionais. Por exemplo, um processador de itens pode solicitar que um sistema externo enriqueça o item atual e, em seguida, retorne o item enriquecido:
+``` java
+public class EnrichingItemProcessor implements ItemProcessor<Person, Person> {
+
+   private AddressService addressService;
+
+   public EnrichingItemProcessor(AddressService addressService) {
+      this.addressService = addressService;
+   }
+
+   public Person process(Person person) {
+      Address address = this.addressService.getAddress(person);
+      person.setAddress(address);
+      return person;
+   }
+}
+```
+Neste *EnrichingItemProcessor*, itens do tipo *Person* são enriquecidos com o endereço da pessoa usando um *AddressService*. Este é um exemplo típico de um processador de itens que enriquece dados sem transformá-los.
+
+### Validando Dados
+O método *process* é projetado para lançar uma exceção em caso de erro de processamento. Erros de processamento podem ser erros técnicos (como falha em chamar um serviço externo) ou erros funcionais (como itens inválidos).
+
+Um dos casos de uso mais comuns de um processador de itens é a validação de dados. Depois que lemos itens de uma fonte de entrada, podemos precisar validar se os dados de entrada são válidos ou não antes de salvá-los no sistema de destino. Em sistemas empresariais típicos, os dados geralmente são consumidos de uma fonte confiável, mas nem sempre é esse o caso. Na verdade, em muitos sistemas de lote corporativos, os dados são consumidos de fontes externas que podem não ser confiáveis, nesse caso, validar os dados é crucial para a segurança e integridade do sistema de destino.
+
+An *ItemProcessor* é o lugar ideal para implementar regras de validação de dados. Veja o exemplo:
+``` java
+public class ValidatingItemProcessor implements ItemProcessor<Person, Person> {
+
+   private EmailService emailService;
+
+   public ValidatingItemProcessor(EmailService emailService) {
+      this.emailService = emailService;
+   }
+
+   public Person process(Person person) {
+      if (!this.emailService.isValid(person.getEmail()) {
+         throw new InvalidEmailException("Invalid email for " + person);
+      }
+      return person;
+   }
+}
+```
+A classe *ValidatingItemProcessor* foi escrita para validar o e-mail da pessoa usando um *EmailService* hipotético, e rejeitar itens inválidos lançando um *InvalidEmailException*. Por outro lado, se o e-mail da pessoa for válido, o item é retornado como está.
+
+### Filtrando dados
+
+O último resultado do método *process* que ainda não abordamos é quando o método retorna *null*. Como o Spring Batch interpreta tal resultado do processador de itens?
+
+O retorno *null* do método *process* diz ao Spring Batch para filtrar o item atual *Stream#filter* . Filtrar o item atual significa simplesmente não deixá-lo continuar no pipeline de processamento. Portanto, ele será removido da escrita como parte do pedaço atual.
+
+A filtragem de dados é outro caso de uso típico para um processador de itens. A última etapa do nosso *BillingJob* é gerar um relatório de faturamento para clientes que gastaram mais de US$ 150 por mês. Isso significa que devemos filtrar todos os clientes que gastaram menos do que esse valor. Veja o exemplo a seguir:
+``` java
+public class FilteringItemProcessor implements ItemProcessor<BillingData, BillingData> {
+
+   public BillingData process(BillingData item) }
+      if (item.getMonthlySpending() < 150) {
+         return null; // filter customers spending less than $150
+      }
+      return item;
+   }
+}
+```
+Neste exemplo, itens com o valor *monthlySpending* inferior a US$ 150 são filtrados, ou melhor, definidos como *null* e não serão incluídos no relatório final.
