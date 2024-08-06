@@ -1337,25 +1337,8 @@ Com nossa nova implementação de processador e definição de bean em vigor, so
 ### Gerando o relatório de faturamento
 Conforme mencionado anteriormente, o relatório de faturamento é um arquivo simples com o mesmo formato do arquivo de entrada, mas com apenas um subconjunto de clientes e uma coluna adicional para o valor total do faturamento.
 
-Para geração desse relatório de faturamento, utilizaremos o *FlatFileItemWriter* do prórpio Spring Batch.
+Para gerar o relatório, dos clientes anteriormente filtrados, utilizaremos o *FlatFileItemWriter* do próprio Spring Batch.
 
-
-### Gerando o relatório de faturamento
-Para gerar o relatório, dos clientes anteriormente filtrados, utilizaremos o *FlatFileItemWriter* forncedido pelo Spring Batch.
-
-### Adicionando o bean FlatFileItemWriter ao Job AJUSTAR
-Na classe *FlatFileItemWriter.java* adicione o seguinte bean, como segue:
-```java
-@Bean
-public FlatFileItemWriter<ReportingData> billingDataFileWriter() {
-        return new FlatFileItemWriterBuilder<ReportingData>()
-            .resource(new FileSystemResource("staging/billing-report-2023-01.csv"))
-            .name("billingDataFileWriter")
-            .delimited()
-            .names("billingData.dataYear", "billingData.dataMonth", "billingData.accountId", "billingData.phoneNumber", "billingData.dataUsage", "billingData.callDuration", "billingData.smsCount", "billingTotal")
-            .build();
-}
-```
 ### Adicionando a bean FlatFileItemWriter ao BillingJobConfiguration
 Na classe BillingJobConfiguration.java, adicione a seguinte bean, como segue:
 ``` java
