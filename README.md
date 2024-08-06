@@ -753,38 +753,13 @@ public Step step1(JobRepository jobRepository, JdbcTransactionManager transactio
 }
 ```
 
-A classe BillingJobConfiguration ficará como segue:
-``` java
-import org.springframework.batch.core.Job;
-import org.springframework.batch.core.Step;
-import org.springframework.batch.core.repository.JobRepository;
-import org.springframework.batch.core.step.builder.StepBuilder;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.jdbc.support.JdbcTransactionManager;
-
-@Configuration
-public class BillingJobConfiguration {
-
-	@Bean
-	public Job job(JobRepository jobRepository) {
-		return new BillingJob(jobRepository);
-	}
-	@Bean
-	public Step step1(JobRepository jobRepository, JdbcTransactionManager transactionManager) {
-		return new StepBuilder("filePreparation", jobRepository)
-				.tasklet(new FilePreparationTasklet(), transactionManager)
-				.build();
-	}
-}
-```
 Nessa porção de código, foi definida uma *bean* chamada step1, do tipo *Step*
 Foi passada a referência de um *JobRepository* para a step, e uma *JdbcTransactionManager* para a tasklet. Essa transacition manager é auto-configurada pelo Spring Boot, podendo assim ser usada para define a *TaskletStep*.
 
 Vale lembrar que uma *TaskletStep* precisa de uma gerenciador de transações para orquestrar a transação de cada iteração da *Tasklet*. A *TaskletStep* é definida pela chamada ao *StepBuilder.tasklet* para o qual é passada uma instância do *FilePreparationTasklet* e o gerenciador de transações para gerenciar as transações.
 
-Em seguida modificar a configuração do Job.
-Alterar a BillingJobConfiguration.java, substituindo a bean job, existente nessa classe.
+Em seguida **modificar** a configuração do método Job().
+Alterar a BillingJobConfiguration.java, substituindo a bean job, existente nessa classe, pela que segue:
 
 ``` java
 @Bean
