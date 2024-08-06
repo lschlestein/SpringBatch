@@ -96,7 +96,7 @@ Se estiver utilizando o Docker, verifique se o container está inicializado e ro
 
 Criando um container docker:
 ``` bash
-docker run --name springBatchPostgres -p 5432:5432 -e POSTGRES_PASSWORD=1234 -d postgres
+docker run --name postgres -p 5432:5432 -e POSTGRES_PASSWORD=1234 -d postgres
 ```
 Verificando se o container foi iniciado:
 ``` bash
