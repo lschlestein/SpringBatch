@@ -365,47 +365,17 @@ public class BillingJobConfiguration {
     }
 }
 ```
-É necessário limpar a base de dados e rodar novamento o Job.
+Recriar o esquema de tabelas, pois, o Spring Batch não deixa que seja um Job anteriormente criado, seja, rodado novamente.
+``` bash
+docker stop postgres
+docker remove postgres
+docker run --name postgres -p 5432:5432 -e POSTGRES_PASSWORD=postgres -d postgres
+```
 Em seguida, acesse o terminal do postgres
 ``` bash
 docker exec -it postgres psql -U postgres
 ```
-Conectado ao terminal, criei o seguinte esquema de tabelas conforme abaixo:
-
-ou
-
-Execute no terminal o seguinte comando
-``` bash
-scripts/drop-create-database.sh
-```
-Arquivo drop-create-database.sh
-``` bash
-#!/bin/bash
-set -e
-
-# This script is used to drop and recreate the meta-data tables
-
-docker exec postgres psql -f /mnt/exercises/src/sql/schema-drop-postgresql.sql -U postgres
-docker exec postgres psql -f /mnt/exercises/src/sql/schema-postgresql.sql -U postgres
-```
-
-Para que o script seja executado corretamente, os seguintes arquivos devem ser criados no diretório /src/sql
-
-schema-drop-postgresql.sql
-``` sql
-DROP TABLE  IF EXISTS BATCH_STEP_EXECUTION_CONTEXT;
-DROP TABLE  IF EXISTS BATCH_JOB_EXECUTION_CONTEXT;
-DROP TABLE  IF EXISTS BATCH_STEP_EXECUTION;
-DROP TABLE  IF EXISTS BATCH_JOB_EXECUTION_PARAMS;
-DROP TABLE  IF EXISTS BATCH_JOB_EXECUTION;
-DROP TABLE  IF EXISTS BATCH_JOB_INSTANCE;
-
-DROP SEQUENCE  IF EXISTS BATCH_STEP_EXECUTION_SEQ;
-DROP SEQUENCE  IF EXISTS BATCH_JOB_EXECUTION_SEQ;
-DROP SEQUENCE  IF EXISTS BATCH_JOB_SEQ;
-```
-
-schema-postgresql.sql
+Conectado ao terminal, crie o seguinte esquema de tabelas conforme abaixo:
 ```sql
 CREATE TABLE BATCH_JOB_INSTANCE  (
                                      JOB_INSTANCE_ID BIGINT  NOT NULL PRIMARY KEY ,
@@ -484,7 +454,25 @@ CREATE SEQUENCE BATCH_STEP_EXECUTION_SEQ MAXVALUE 9223372036854775807 NO CYCLE;
 CREATE SEQUENCE BATCH_JOB_EXECUTION_SEQ MAXVALUE 9223372036854775807 NO CYCLE;
 CREATE SEQUENCE BATCH_JOB_SEQ MAXVALUE 9223372036854775807 NO CYCLE;
 ```
-Agora o status COMPLETED deverá ser mostrado.
+Para conferir se as tabelas foram criadas corretamente, digite \d no terminal do postgres:
+``` bash
+postgres=# \d
+                      List of relations
+ Schema |             Name             |   Type   |  Owner
+--------+------------------------------+----------+----------
+ public | batch_job_execution          | table    | postgres
+ public | batch_job_execution_context  | table    | postgres
+ public | batch_job_execution_params   | table    | postgres
+ public | batch_job_execution_seq      | sequence | postgres
+ public | batch_job_instance           | table    | postgres
+ public | batch_job_seq                | sequence | postgres
+ public | batch_step_execution         | table    | postgres
+ public | batch_step_execution_context | table    | postgres
+ public | batch_step_execution_seq     | sequence | postgres
+(9 rows)
+postgres=#
+```
+Agora o status COMPLETED deverá ser mostrado no log, após aplicação ter sido rodada novamente.
 ``` bash
 2023-05-03T21:21:07.939Z  INFO 7458 --- [           main] o.s.b.c.l.support.SimpleJobLauncher      : Job: [example.billingjob.BillingJob@66f0548d] completed with the following parameters: [{}] and the following status: [COMPLETED]
 ```
