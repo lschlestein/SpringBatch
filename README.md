@@ -1011,6 +1011,13 @@ Observe como, com apenas algumas linhas de código de configuração, o Spring B
 
 ### Configurando um Item Writer
 Criar a tabela onde os dados importados serão armazenados:
+
+No terminal, acesse o terminal do Postgres:
+``` bash
+docker exec -it postgres psql -U postgres
+```
+
+Então crie a tabela que armazenará as informações adquiridas de nossos arquivos de entrada.
 ``` sql
 create table BILLING_DATA
 (
