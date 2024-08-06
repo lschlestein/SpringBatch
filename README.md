@@ -23,8 +23,6 @@ Você pode usar o Spring Batch em casos de uso simples (como carregar um arquivo
 
 O Spring Batch integra-se perfeitamente com outras tecnologias Spring, o que o torna uma excelente escolha para escrever aplicativos em lote com Spring.
 
-## Configura a etapa de ingestão de arquivos
-
 ### Liguagem de domínio em lote
 
 Os conceitos chave do modelo de domínio do Spring Batch, são representados a seguir:
@@ -908,6 +906,8 @@ Acima note como o  *JdbcBatchItemWriter* é construído usando construções esp
 Uma etapa orientada a bloco (chunk) no Spring Batch é uma *TaskletStep* configurada com um tipo de *Tasklet* específico, o *ChunkOrientedTasklet*. Essa "Tasklet" que implementa o modelo de processamento orientado a blocos (chunk), usando um leitor de itens (item reader) e um escritor de itens (item writter).
 
 Semelhante à configuração de um *TaskletStep* com uma *tasklet* personalizada, a configuração de um *tasklet* orientado a blocos também é feita por meio da API *StepBuilder*, exceto que precisaremos chamar o método *chunk* ao invés do método *tasklet*.
+
+## Configura a etapa de ingestão de arquivos
 
 ### Ingestão de arquivo
 A etapa de ingestão de arquivo tem como objetivo ler dados de um arquivo simples e gravá-los em um banco de dados relacional. Portanto, supondo que o *FlatFileItemReader<BillingData>* e *JdbcBatchItemWriter<BillingData>* mostrados anteriormente, veja como configurar a etapa (step):
