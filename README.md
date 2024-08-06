@@ -1212,3 +1212,109 @@ public class FilteringItemProcessor implements ItemProcessor<BillingData, Billin
 }
 ```
 Neste exemplo, itens com o valor *monthlySpending* inferior a US$ 150 são filtrados, ou melhor, definidos como *null* e não serão incluídos no relatório final.
+
+# Prática - 6
+O objetivo dessa prática, é processar as informações adquiridas do arquivo *billing-2023-01.csv*. Será gerado um novo relatório de faturamento, filtrando clientes que tiveram um gasto maior de U$ 150/mês.
+O formato da saída, será igual ao da entrada, somente será adicionada uma coluna com o valor total do faturamento do mês.
+* Leremos os dados da tabela *BILLING_DATA*, que populamos anteriormente com o *step fileIngestion*. Agora será calculado o gasto mensal de cada cliente, e serão apresentados os que tiveram gasto superior a U$ 150/mês.
+
+## Lendo dados de faturamento do banco de dados.
+Como, nesta prática, leremos dados de uma fonte de dados JDBC, utilizaremos o leitor *JdbcCursorItemReader* do Spring Batch. Os dados são retornados através de um *ResultSet* por esse leitor.
+
+### Criando o bean billingDataTableReader
+Adicione o bean na classe BillingJobConfiguration.java conforme segue:
+``` java
+@Bean
+public JdbcCursorItemReader<BillingData> billingDataTableReader(DataSource dataSource) {
+    String sql = "select * from BILLING_DATA";
+    return new JdbcCursorItemReaderBuilder<BillingData>()
+            .name("billingDataTableReader")
+            .dataSource(dataSource)
+            .sql(sql)
+            .rowMapper(new DataClassRowMapper<>(BillingData.class))
+            .build();
+}
+```
+
+### Compreendendo o reader
+Neste método de definição de bean, usamos *JdbcCursorItemReaderBuilder* para criar um *JdbcCursorItemReader*. As principais propriedades de configuração deste leitor são a fonte de dados, a consulta SQL para buscar dados e o tipo de item de destino para o qual os dados devem ser mapeados.
+
+No nosso caso, o tipo de item de destino é *BillingData*, que é um Java record.
+
+Agora a questão é: como mapear os valores das colunas das linhas do banco de dados para campos do tipo *BillingData*? Para isso podemos usar o *DataClassRowMapper* do Spring Framework.
+
+A classe *DataClassRowMapper* usa a mesma técnica de reflexão em *JdbcBatchItemWriter.beanMapped* que vimos anteriormente para mapear dados de colunas de banco de dados para campos no tipo de destino *BillingData*. Usamos uma instância de *DataClassRowMapper* chamando o método .rowMapper(new DataClassRowMapper<>(BillingData.class)).
+Agora será preciso definir a lógica de processamento do nosso *step*.
+
+### Calculando os dados do relatório
+O cálculo dos gastos mensais e a filtragem dos clientes podem ser feitos em um processador de itens.
+
+Para calcular o gasto mensal, precisamos dos preços de uso de dados, chamadas e mensagens de texto. Utilizaremos os seguintes valalores:
+
+Preço das chamadas: US$ 0,50 por minuto
+Preço de texto/SMS: US$ 0,10 cada
+Preço de dados: US$ 0,01 por MB
+Esta configuração de preços pode variar e deve ser externalizada nas propriedades de configuração. Por esse motivo, iremos implementá-los como propriedades de configuração do Spring com os detalhes de preços anteriores como valores padrão. Por fim, criaremos um novo Java record que representa os dados do relatório, que inclui todos os detalhes do *BillingData* com um novo campo para o valor total do faturamento.
+
+### Criando o novo tipo ReportingData
+Crie um novo Java record de nome ReportingData conforme segue:
+```java
+package example.billingjob;
+
+public record ReportingData(BillingData billingData, double billingTotal) {
+}
+```
+Este record contém as informações de faturamento de cada cliente, bem como o total gasto no campo *billingTotal*, que mostra o valor total gasto por cada cliente. Esse campo será calculado e preenchido posteriormente por um processador de itens.
+
+### Criando o novo processador de itens BillingDataProcessor
+Crie um novo arquivo Java, de nome BillingDataProcessor.java, conforme segue:
+``` java
+package example.billingjob;
+
+import org.springframework.batch.item.ItemProcessor;
+import org.springframework.beans.factory.annotation.Value;
+
+public class BillingDataProcessor implements ItemProcessor<BillingData, ReportingData> {
+
+    @Value("${spring.cellular.pricing.data:0.01}")
+    private float dataPricing;
+
+    @Value("${spring.cellular.pricing.call:0.5}")
+    private float callPricing;
+
+    @Value("${spring.cellular.pricing.sms:0.1}")
+    private float smsPricing;
+
+    @Value("${spring.cellular.spending.threshold:150}")
+    private float spendingThreshold;
+
+   @Override
+   public ReportingData process(BillingData item) {
+      double billingTotal = item.dataUsage() * dataPricing + item.callDuration() * callPricing + item.smsCount() * smsPricing;
+      if (billingTotal < spendingThreshold) {
+         return null;
+      }
+      return new ReportingData(item, billingTotal);
+   }
+}
+```
+Compreendendo o código criado acima. Nossa nova classe de processador implementa a interface *ItemProcessor<BillingData,ReportingData>*.
+
+Nesta classe, calculamos o gasto mensal do cliente atual e filtramos os clientes que gastaram menos de US$ 150 (retornando null nesse caso).
+
+Os detalhes de preços são declarados como propriedades Spring no namespace spring.celluar.* e podem ser configurados externamente via application.properties. Essas propriedades possuem valores padrão que adotaremos nesse exemplo.
+
+Feito o cálculo e a filtragem, criamos um objeto *ReportingData* com as informações de faturamento e também os gastos mensais.
+
+Este processador de itens é uma combinação de diferentes tipos de processamento: ele não apenas enriquece o item atual com novos dados, mas também filtra itens que não são necessários para os requisitos comerciais atuais.
+
+### Declarando o bean BillingDataProcessor
+Na classe BillingJobConfiguration.java, adicione um novo bean, conforme segue:
+``` java
+@Bean
+public BillingDataProcessor billingDataProcessor() {
+    return new BillingDataProcessor();
+}
+```
+É necessário declarar o *BillingDataProcessor* como bean para que ele seja gerenciado pelo Spring e configurado com as propriedades que declaramos nele.
+Com nossa nova implementação de processador e definição de bean em vigor, somente os clientes que gastaram mais de US$ 150 serão repassados ​​ao escritor de itens e incluídos no relatório final. Em seguida, configuraremos o escritor.
