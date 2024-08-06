@@ -1,4 +1,4 @@
 package springbatch.billingjob;
 
-public class ReportingData {
+public record ReportingData(BillingData billingData, double billingTotal) {
 }
