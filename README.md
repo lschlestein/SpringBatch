@@ -93,6 +93,12 @@ This class is a placeholder for Spring Batch related beans (Jobs, Steps, etc) an
 Agora precisaremos configurar a database no Postgres.
 Crie o seguinte esquema conforme segue abaixo. O esquema do banco de dados pode ser criado via terminal, caso esteja utilizando o Docker, ou o PgAdmin.
 Se estiver utilizando o Docker, verifique se o container está inicializado e rodando através do comando:
+
+Criando um container docker:
+``` bash
+docker run --name springBatchPostgres -p 5432:5432 -e POSTGRES_PASSWORD=1234 -d postgres
+```
+Verificando se o container foi iniciado:
 ``` bash
 docker -ps
 
