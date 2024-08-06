@@ -1360,7 +1360,7 @@ O último campo, *billingTotal*, não requer esse prefixo, pois é definido dire
 
 Isso é tudo para o escritor (writter) do item, agora podemos prosseguir para a definição da etapa final.
 
-## Definindo o steo de geração do relatório
+## Definindo o passo (step) de geração do relatório
 A etapa de geração do relatório é orientada a blocos (chunk-oriented), semelhante à primeira etapa do nosso trabalho. A principal diferença aqui é que estamos adicionando um processador de itens, o *billingDataProcessor*.
 
 ### Definindo o step de geração do relatório
@@ -1379,7 +1379,7 @@ public Step step3(JobRepository jobRepository, JdbcTransactionManager transactio
             .build();
 }
 ```
-Compreendendo o código acima. Declaramos um bean denominado step3 do tipo *Step*, que representa a etapa final, *reportGeneration*.
+Explicando o código acima. Declaramos um bean denominado step3 do tipo *Step*, que representa a etapa final, *reportGeneration*.
 
 Semelhante à etapa anterior orientada a blocos, etapa 2 chamada fileIngestion, precisamos passar uma referência ao repositório de tarefas e ao gerenciador de transações. O tamanho do bloco também é 100, o que é um bom valor inicial.
 
