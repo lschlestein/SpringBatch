@@ -1037,7 +1037,22 @@ public JdbcBatchItemWriter<BillingData> billingDataTableWriter(DataSource dataSo
             .build();
 }
 ```
+### Gerando o relatório de faturamento
+Para gerar o relatório, dos clientes anteriormente filtrados, utilizaremos o *FlatFileItemWriter* forncedido pelo Spring Batch.
 
+### Adicionando o bean FlatFileItemWriter ao Job
+Na classe *FlatFileItemWriter.java* adicione o seguinte bean, como segue:
+```java
+@Bean
+public FlatFileItemWriter<ReportingData> billingDataFileWriter() {
+        return new FlatFileItemWriterBuilder<ReportingData>()
+            .resource(new FileSystemResource("staging/billing-report-2023-01.csv"))
+            .name("billingDataFileWriter")
+            .delimited()
+            .names("billingData.dataYear", "billingData.dataMonth", "billingData.accountId", "billingData.phoneNumber", "billingData.dataUsage", "billingData.callDuration", "billingData.smsCount", "billingTotal")
+            .build();
+}
+```
 ### O JdbcBatchItemWriter em Detalhes
 O JdbcBatchItemWriter precisa conhecer o banco de dados de destino para gravar dados e a instrução SQL para executar.
 
@@ -1318,3 +1333,92 @@ public BillingDataProcessor billingDataProcessor() {
 ```
 É necessário declarar o *BillingDataProcessor* como bean para que ele seja gerenciado pelo Spring e configurado com as propriedades que declaramos nele.
 Com nossa nova implementação de processador e definição de bean em vigor, somente os clientes que gastaram mais de US$ 150 serão repassados ​​ao escritor de itens e incluídos no relatório final. Em seguida, configuraremos o escritor.
+
+### Gerando o relatório de faturamento
+Conforme mencionado anteriormente, o relatório de faturamento é um arquivo simples com o mesmo formato do arquivo de entrada, mas com apenas um subconjunto de clientes e uma coluna adicional para o valor total do faturamento.
+
+Para geração desse relatório de faturamento, utilizaremos o *FlatFileItemWriter* do prórpio Spring Batch.
+
+### Adicionando a bean FlatFileItemWriter ao BillingJobConfiguration
+Na classe BillingJobConfiguration.java, adicione a seguinte bean, como segue:
+``` java
+@Bean
+public FlatFileItemWriter<ReportingData> billingDataFileWriter() {
+        return new FlatFileItemWriterBuilder<ReportingData>()
+            .resource(new FileSystemResource("staging/billing-report-2023-01.csv"))
+            .name("billingDataFileWriter")
+            .delimited()
+            .names("billingData.dataYear", "billingData.dataMonth", "billingData.accountId", "billingData.phoneNumber", "billingData.dataUsage", "billingData.callDuration", "billingData.smsCount", "billingTotal")
+            .build();
+}
+```
+*FlatFileItemWriter* precisa ser configurado com o arquivo de destino, que é staging/billing-report-2023-01.csv. Também precisamos especificar o formato do arquivo (que está delimitado no nosso caso) e os campos que queremos exportar nele. Isso é feito usando os métodos .delimited() e .names() respectivamente.
+
+Este criador de itens aceita itens do tipo *ReportingData* que foram transformados de *BillingData* no processador de itens. A lista de campos provenientes do *ReportingData.billingData* aninhado é prefixada com *billingData*.
+
+O último campo, *billingTotal*, não requer esse prefixo, pois é definido diretamente no tipo *ReportingData*.
+
+Isso é tudo para o escritor (writter) do item, agora podemos prosseguir para a definição da etapa final.
+
+## Definindo o steo de geração do relatório
+A etapa de geração do relatório é orientada a blocos (chunk-oriented), semelhante à primeira etapa do nosso trabalho. A principal diferença aqui é que estamos adicionando um processador de itens, o *billingDataProcessor*.
+
+### Definindo o step de geração do relatório
+Abra a classe BillingJobConfiguration.java e adicione o bean, como segue:
+``` java
+@Bean
+public Step step3(JobRepository jobRepository, JdbcTransactionManager transactionManager,
+                           ItemReader<BillingData> billingDataTableReader,
+                           ItemProcessor<BillingData, ReportingData> billingDataProcessor,
+                           ItemWriter<ReportingData> billingDataFileWriter) {
+    return new StepBuilder("reportGeneration", jobRepository)
+            .<BillingData, ReportingData>chunk(100, transactionManager)
+            .reader(billingDataTableReader)
+            .processor(billingDataProcessor)
+            .writer(billingDataFileWriter)
+            .build();
+}
+```
+Compreendendo o código acima. Declaramos um bean denominado step3 do tipo *Step*, que representa a etapa final, *reportGeneration*.
+
+Semelhante à etapa anterior orientada a blocos, etapa 2 chamada fileIngestion, precisamos passar uma referência ao repositório de tarefas e ao gerenciador de transações. O tamanho do bloco também é 100, o que é um bom valor inicial.
+
+O leitor, processador e gravador de itens também são passados ​​como parâmetros para o método de definição de bean, de modo que sejam conectados automaticamente pelo Spring a partir das definições de bean anteriores.
+
+Vamos agora ter certeza de que entendemos o que cada um desses três beans autowired está fazendo e em que fase eles estão sendo usados.
+
+* *.reader(billingDataTableReader)*
+Esta fase está usando nosso bean *JdbcCursorItemReader* para ler e mapear dados que já foram inseridos no banco de dados na etapa 2 (step 2).
+
+* *.processor(billingDataProcessor)*
+Este é o nosso novo bean *ItemProcessor* que não apenas filtra contas inferiores a US$ 150, mas também enriquece os dados com o valor real gasto.
+
+Há uma grande diferença em relação ao fileIngestion da etapa 2, que não possuía fase de processador. Embora a etapa fileIngestion não tenha alterado o tipo de item (já que não usou um processador de item), observe como o tipo de item muda aqui: <BillingData, ReportingData>chunk(...). Na verdade, esta etapa final altera o tipo de item com um processador de item, daí esta notação.
+
+* *.writer(billingDataFileWriter)*
+Por fim, usamos um *FlatFileItemWriter* para gravar os dados filtrados e enriquecidos em um arquivo para fins de relatório.
+
+### Adicionando o terceiro passo (step 3) ao fluxo
+Alterar o bean, da classe billingJobConfiguration.java, conforme segue:
+``` java
+@Bean
+public Job job(JobRepository jobRepository, Step step1, Step step2, Step step3) {
+    return new JobBuilder("BillingJob", jobRepository)
+            .start(step1)
+            .next(step2)
+            .next(step3)
+            .build();
+}
+```
+Ao adicionar step3 após step2 no *JobBuilder*, a etapa *reportGeneration* será executada somente após a etapa fileIngestion ter sido concluída com êxito.
+Agora devemo empacotar e rodar a aplicação.
+
+No terminal, empacotar e rodar a aplicação.
+``` bash
+./mvnw clean package -Dmaven.test.skip=true
+```
+
+Em seguida executar o jar:
+``` bash
+java -jar target/billing-job-0.0.1-SNAPSHOT.jar input.file=src/main/resources/billing-2023-01.csv
+```
