@@ -88,7 +88,7 @@ public class BillingJobConfiguration {
   // TODO add job definition here
 }
 ```
-This class is a placeholder for Spring Batch related beans (Jobs, Steps, etc) and contains a TODO that you will implement in a future Lab.
+Essa classe é onde ficaram ao Beans (Jobs, Steps, etc) do Spring Batch. Implementaremos ela no decorrer desse documento.
 
 Agora precisaremos configurar a database no Postgres.
 Crie o seguinte esquema conforme segue abaixo. O esquema do banco de dados pode ser criado via terminal, caso esteja utilizando o Docker, ou o PgAdmin.
